@@ -1,0 +1,314 @@
+{
+	"info": {
+		"name": "AtlasSync Auth",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8081"
+		},
+		{
+			"key": "accessToken",
+			"value": ""
+		},
+		{
+			"key": "refreshToken",
+			"value": ""
+		}
+	],
+	"item": [
+		{
+			"name": "1. Register",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('accessToken', json.accessToken);",
+							"    pm.collectionVariables.set('refreshToken', json.refreshToken);",
+							"    pm.test('Has access token', () => pm.expect(json.accessToken).to.be.a('string'));",
+							"    pm.test('Has refresh token', () => pm.expect(json.refreshToken).to.be.a('string'));",
+							"    pm.test('Role is ROLE_CUSTOMER', () => pm.expect(json.role).to.eql('ROLE_CUSTOMER'));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"customer@atlassync.com\",\n    \"username\": \"customer1\",\n    \"password\": \"Password123!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "register"]
+				}
+			}
+		},
+		{
+			"name": "2. Register (duplicate - expect 409)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"customer@atlassync.com\",\n    \"username\": \"customer1\",\n    \"password\": \"Password123!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "register"]
+				}
+			}
+		},
+		{
+			"name": "3. Register (bad input - expect 400)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"not-an-email\",\n    \"username\": \"ab\",\n    \"password\": \"short\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "register"]
+				}
+			}
+		},
+		{
+			"name": "4. Login",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('accessToken', json.accessToken);",
+							"    pm.collectionVariables.set('refreshToken', json.refreshToken);",
+							"    pm.test('Has access token', () => pm.expect(json.accessToken).to.be.a('string'));",
+							"    pm.test('Has refresh token', () => pm.expect(json.refreshToken).to.be.a('string'));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"customer@atlassync.com\",\n    \"password\": \"Password123!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "login"]
+				}
+			}
+		},
+		{
+			"name": "5. Login (wrong password - expect 401)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"customer@atlassync.com\",\n    \"password\": \"WrongPassword!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/login",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "login"]
+				}
+			}
+		},
+		{
+			"name": "6. Refresh Token",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"if (pm.response.code === 200) {",
+							"    var json = pm.response.json();",
+							"    pm.collectionVariables.set('accessToken', json.accessToken);",
+							"    pm.collectionVariables.set('refreshToken', json.refreshToken);",
+							"    pm.test('Got new access token', () => pm.expect(json.accessToken).to.be.a('string'));",
+							"    pm.test('Got rotated refresh token', () => pm.expect(json.refreshToken).to.be.a('string'));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/refresh",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "refresh"]
+				}
+			}
+		},
+		{
+			"name": "7. Reuse Old Refresh Token (expect 401)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// This should fail because the old token was already rotated in step 6.",
+							"// Run step 4 (Login) first, save that refreshToken manually,",
+							"// then run step 6 (Refresh), then paste the OLD token here."
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"refreshToken\": \"PASTE_OLD_REFRESH_TOKEN_HERE\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/refresh",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "refresh"]
+				}
+			}
+		},
+		{
+			"name": "8. Logout",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/logout",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "logout"]
+				}
+			}
+		},
+		{
+			"name": "9. Refresh After Logout (expect 401)",
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"refreshToken\": \"{{refreshToken}}\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/refresh",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "refresh"]
+				}
+			}
+		},
+		{
+			"name": "10. Register Worker",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"exec": [
+							"// Note: this registers as CUSTOMER by default.",
+							"// To test WORKER role, you'd need an admin endpoint",
+							"// or manually update the role in the DB.",
+							"if (pm.response.code === 201) {",
+							"    var json = pm.response.json();",
+							"    pm.test('Has tokens', () => pm.expect(json.accessToken).to.be.a('string'));",
+							"}"
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n    \"email\": \"worker@atlassync.com\",\n    \"username\": \"worker1\",\n    \"password\": \"Password123!\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/auth/register",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "auth", "register"]
+				}
+			}
+		}
+	]
+}
