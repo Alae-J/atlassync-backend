@@ -1,0 +1,38 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: session-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/atlassync_session
+    username: atlassync
+    password: atlassync
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+vault:
+  uri: ${VAULT_ADDR:http://localhost:8200}
+  token: ${VAULT_TOKEN:root}
+
+jwt:
+  secret: ${JWT_SECRET:atlassync-fallback-hmac-signing-key-for-dev}
+
+grpc:
+  server:
+    port: 9084
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
