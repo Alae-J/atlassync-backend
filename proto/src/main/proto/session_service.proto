@@ -1,0 +1,32 @@
+syntax = "proto3";
+package atlassync.session.v1;
+
+option java_multiple_files = true;
+option java_package = "com.atlassync.proto.session";
+
+service SessionService {
+  rpc ValidateSession (ValidateSessionRequest) returns (SessionResponse);
+  rpc CreateExitToken (ExitTokenRequest) returns (ExitTokenResponse);
+}
+
+message ValidateSessionRequest {
+  string session_id = 1;
+  string user_id = 2;
+}
+
+message SessionResponse {
+  string session_id = 1;
+  string status = 2;
+  bool valid = 3;
+}
+
+message ExitTokenRequest {
+  string session_id = 1;
+}
+
+message ExitTokenResponse {
+  string qr_payload = 1;
+  string signature = 2;
+  string correlation_id = 3;
+  int64 expires_at_epoch = 4;
+}

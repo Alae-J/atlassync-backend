@@ -1,0 +1,35 @@
+syntax = "proto3";
+package atlassync.product.v1;
+
+option java_multiple_files = true;
+option java_package = "com.atlassync.proto.product";
+
+service ProductService {
+  rpc GetProduct (GetProductRequest) returns (ProductResponse);
+  rpc GetProducts (GetProductsRequest) returns (GetProductsResponse);
+}
+
+message GetProductRequest {
+  string barcode = 1;
+}
+
+message GetProductsRequest {
+  repeated string barcodes = 1;
+}
+
+message ProductResponse {
+  string barcode = 1;
+  string name = 2;
+  string brand = 3;
+  string price = 4;
+  string currency_code = 5;
+  string image_url = 6;
+  string nutriscore_grade = 7;
+  int32 aisle_number = 8;
+  bool rfid_flag = 9;
+  string attributes_json = 10;
+}
+
+message GetProductsResponse {
+  repeated ProductResponse products = 1;
+}
