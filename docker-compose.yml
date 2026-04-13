@@ -1,6 +1,6 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: postgres:16.13-alpine
     environment:
       POSTGRES_USER: atlassync
       POSTGRES_PASSWORD: atlassync
@@ -17,7 +17,7 @@ services:
       retries: 5
 
   redis:
-    image: redis:7-alpine
+    image: redis:7.4.8-alpine
     ports:
       - "6379:6379"
     healthcheck:
@@ -27,7 +27,7 @@ services:
       retries: 5
 
   kafka:
-    image: confluentinc/cp-kafka:7.7.1
+    image: confluentinc/cp-kafka:8.2.0
     ports:
       - "9092:9092"
     environment:
@@ -49,7 +49,7 @@ services:
       retries: 5
 
   vault:
-    image: hashicorp/vault:1.15
+    image: hashicorp/vault:1.21.4
     ports:
       - "8200:8200"
     environment:
@@ -64,7 +64,7 @@ services:
       retries: 5
 
   vault-init:
-    image: hashicorp/vault:1.15
+    image: hashicorp/vault:1.21.4
     depends_on:
       vault:
         condition: service_healthy
@@ -77,16 +77,14 @@ services:
     restart: "no"
 
   jaeger:
-    image: jaegertracing/all-in-one:1.62
+    image: jaegertracing/jaeger:2.17.0
     ports:
       - "16686:16686"
       - "4317:4317"
       - "4318:4318"
-    environment:
-      COLLECTOR_OTLP_ENABLED: "true"
 
   prometheus:
-    image: prom/prometheus:v2.54.1
+    image: prom/prometheus:v3.11.1
     ports:
       - "9090:9090"
     volumes:
@@ -95,7 +93,7 @@ services:
       - "host.docker.internal:host-gateway"
 
   grafana:
-    image: grafana/grafana:11.3.0
+    image: grafana/grafana:12.4.2
     ports:
       - "3000:3000"
     environment:
