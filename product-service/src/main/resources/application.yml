@@ -1,0 +1,40 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: product-service
+  datasource:
+    url: jdbc:postgresql://localhost:5432/atlassync_product
+    username: atlassync
+    password: atlassync
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  flyway:
+    enabled: true
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  cache:
+    type: redis
+    redis:
+      time-to-live: 3600000
+
+grpc:
+  server:
+    port: 9082
+
+openfoodfacts:
+  base-url: https://world.openfoodfacts.org/api/v2
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus
