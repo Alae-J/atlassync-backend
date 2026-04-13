@@ -1,0 +1,136 @@
+{
+	"info": {
+		"name": "AtlasSync Products",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8082"
+		}
+	],
+	"item": [
+		{
+			"name": "1. Get Barilla Spaghetti",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/8076802085738",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "8076802085738"]
+				}
+			}
+		},
+		{
+			"name": "2. Get Wine (RFID flagged)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/3500610033629",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "3500610033629"]
+				}
+			}
+		},
+		{
+			"name": "3. Get Coca-Cola",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/5449000000996",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "5449000000996"]
+				}
+			}
+		},
+		{
+			"name": "4. Get Unknown Barcode (OFacts fallback)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/7613034626844",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "7613034626844"]
+				}
+			}
+		},
+		{
+			"name": "5. Get Nonexistent Barcode (expect 404)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/0000000000000",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "0000000000000"]
+				}
+			}
+		},
+		{
+			"name": "6. Search by Name",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/search?query=barilla&limit=5",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "search"],
+					"query": [
+						{ "key": "query", "value": "barilla" },
+						{ "key": "limit", "value": "5" }
+					]
+				}
+			}
+		},
+		{
+			"name": "7. Search by Name (partial match)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/search?query=choc&limit=10",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "search"],
+					"query": [
+						{ "key": "query", "value": "choc" },
+						{ "key": "limit", "value": "10" }
+					]
+				}
+			}
+		},
+		{
+			"name": "8. Batch Lookup (3 products)",
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/batch?barcodes=8076802085738,5449000000996,3250390003700",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "batch"],
+					"query": [
+						{ "key": "barcodes", "value": "8076802085738,5449000000996,3250390003700" }
+					]
+				}
+			}
+		},
+		{
+			"name": "9. Get Spaghetti Again (cached in Redis)",
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"exec": [
+							"// Run request 1 first, then this one.",
+							"// Should be faster since it's cached in Redis."
+						],
+						"type": "text/javascript"
+					}
+				}
+			],
+			"request": {
+				"method": "GET",
+				"url": {
+					"raw": "{{baseUrl}}/api/products/8076802085738",
+					"host": ["{{baseUrl}}"],
+					"path": ["api", "products", "8076802085738"]
+				}
+			}
+		}
+	]
+}
