@@ -1,216 +1,299 @@
 {
-	"info": {
-		"name": "AtlasSync Sessions",
-		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
-	},
-	"variable": [
-		{
-			"key": "baseUrl",
-			"value": "http://localhost:8084"
-		},
-		{
-			"key": "sessionId",
-			"value": ""
-		},
-		{
-			"key": "entryCorrelationId",
-			"value": ""
-		},
-		{
-			"key": "exitCorrelationId",
-			"value": ""
-		}
-	],
-	"item": [
-		{
-			"name": "1. Start Session",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"if (pm.response.code === 201) {",
-							"    var json = pm.response.json();",
-							"    pm.collectionVariables.set('sessionId', json.sessionId);",
-							"    pm.collectionVariables.set('entryCorrelationId', json.entryQr.correlationId);",
-							"    pm.test('Session created', () => pm.expect(json.status).to.eql('CREATED'));",
-							"    pm.test('Has entry QR', () => pm.expect(json.entryQr.correlationId).to.be.a('string'));",
-							"    pm.test('Entry QR signed', () => pm.expect(json.entryQr.signature).to.be.a('string'));",
-							"}"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" },
-					{ "key": "X-User-Id", "value": "1" }
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/sessions/start",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "sessions", "start"]
-				}
-			}
-		},
-		{
-			"name": "2. Get Session",
-			"request": {
-				"method": "GET",
-				"url": {
-					"raw": "{{baseUrl}}/api/sessions/{{sessionId}}",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "sessions", "{{sessionId}}"]
-				}
-			}
-		},
-		{
-			"name": "3. Gate Entry (activate session)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"if (pm.response.code === 200) {",
-							"    var json = pm.response.json();",
-							"    pm.test('Gate entry valid', () => pm.expect(json.valid).to.be.true);",
-							"}"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" }
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"correlationId\": \"{{entryCorrelationId}}\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/gate/entry",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "gate", "entry"]
-				}
-			}
-		},
-		{
-			"name": "4. Gate Entry Again (expect fail - already used)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" }
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"correlationId\": \"{{entryCorrelationId}}\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/gate/entry",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "gate", "entry"]
-				}
-			}
-		},
-		{
-			"name": "5. Pay (generates exit QR)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"if (pm.response.code === 200) {",
-							"    var json = pm.response.json();",
-							"    pm.collectionVariables.set('exitCorrelationId', json.exitQr.correlationId);",
-							"    pm.test('Session completed', () => pm.expect(json.status).to.eql('COMPLETED'));",
-							"    pm.test('Has exit QR', () => pm.expect(json.exitQr.correlationId).to.be.a('string'));",
-							"}"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" },
-					{ "key": "X-User-Id", "value": "1" }
-				],
-				"url": {
-					"raw": "{{baseUrl}}/api/sessions/{{sessionId}}/pay",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "sessions", "{{sessionId}}", "pay"]
-				}
-			}
-		},
-		{
-			"name": "6. Gate Exit (validate exit QR)",
-			"event": [
-				{
-					"listen": "test",
-					"script": {
-						"exec": [
-							"if (pm.response.code === 200) {",
-							"    var json = pm.response.json();",
-							"    pm.test('Gate exit valid', () => pm.expect(json.valid).to.be.true);",
-							"}"
-						],
-						"type": "text/javascript"
-					}
-				}
-			],
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" }
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"correlationId\": \"{{exitCorrelationId}}\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/gate/exit",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "gate", "exit"]
-				}
-			}
-		},
-		{
-			"name": "7. Gate Exit Again (expect fail - already used)",
-			"request": {
-				"method": "POST",
-				"header": [
-					{ "key": "Content-Type", "value": "application/json" }
-				],
-				"body": {
-					"mode": "raw",
-					"raw": "{\n    \"correlationId\": \"{{exitCorrelationId}}\"\n}"
-				},
-				"url": {
-					"raw": "{{baseUrl}}/api/gate/exit",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "gate", "exit"]
-				}
-			}
-		},
-		{
-			"name": "8. Get Nonexistent Session (expect 404)",
-			"request": {
-				"method": "GET",
-				"url": {
-					"raw": "{{baseUrl}}/api/sessions/00000000-0000-0000-0000-000000000000",
-					"host": ["{{baseUrl}}"],
-					"path": ["api", "sessions", "00000000-0000-0000-0000-000000000000"]
-				}
-			}
-		}
-	]
+  "info": {
+    "_postman_id": "92ee84f2-1ae0-408d-b41f-a21698f3dc65",
+    "name": "AtlasSync Sessions",
+    "description": "Shopping session lifecycle: start -> entry QR -> pay -> exit QR",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8084"
+    },
+    {
+      "key": "sessionId",
+      "value": ""
+    },
+    {
+      "key": "entryCorrelationId",
+      "value": ""
+    },
+    {
+      "key": "exitCorrelationId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "1. Start Session",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    var json = pm.response.json();",
+              "    pm.collectionVariables.set('sessionId', json.sessionId);",
+              "    pm.collectionVariables.set('entryCorrelationId', json.entryQr.correlationId);",
+              "    pm.test('Session created', () => pm.expect(json.status).to.eql('CREATED'));",
+              "    pm.test('Has entry QR', () => pm.expect(json.entryQr.correlationId).to.be.a('string'));",
+              "    pm.test('Entry QR signed', () => pm.expect(json.entryQr.signature).to.be.a('string'));",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "1"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/sessions/start",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sessions",
+            "start"
+          ]
+        }
+      },
+      "id": "9c0ded46-13eb-4783-9654-ea555801cd7c"
+    },
+    {
+      "name": "2. Get Session",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sessions/{{sessionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sessions",
+            "{{sessionId}}"
+          ]
+        }
+      },
+      "id": "1954b613-c78e-435b-a15d-c787182731a3"
+    },
+    {
+      "name": "3. Gate Entry (activate session)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var json = pm.response.json();",
+              "    pm.test('Gate entry valid', () => pm.expect(json.valid).to.be.true);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"correlationId\": \"{{entryCorrelationId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/gate/entry",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "gate",
+            "entry"
+          ]
+        }
+      },
+      "id": "dde689d7-9cb1-451c-8ee4-01f243ce4bcf"
+    },
+    {
+      "name": "4. Gate Entry Again (expect fail - already used)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"correlationId\": \"{{entryCorrelationId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/gate/entry",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "gate",
+            "entry"
+          ]
+        }
+      },
+      "id": "0be6255d-c755-4870-a38c-bdd2705bd5a4"
+    },
+    {
+      "name": "5. Pay (generates exit QR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var json = pm.response.json();",
+              "    pm.collectionVariables.set('exitCorrelationId', json.exitQr.correlationId);",
+              "    pm.test('Session completed', () => pm.expect(json.status).to.eql('COMPLETED'));",
+              "    pm.test('Has exit QR', () => pm.expect(json.exitQr.correlationId).to.be.a('string'));",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "X-User-Id",
+            "value": "1"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/sessions/{{sessionId}}/pay",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sessions",
+            "{{sessionId}}",
+            "pay"
+          ]
+        }
+      },
+      "id": "a4ce8c04-41ac-4497-bd22-da315052ffb5"
+    },
+    {
+      "name": "6. Gate Exit (validate exit QR)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "if (pm.response.code === 200) {",
+              "    var json = pm.response.json();",
+              "    pm.test('Gate exit valid', () => pm.expect(json.valid).to.be.true);",
+              "}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"correlationId\": \"{{exitCorrelationId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/gate/exit",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "gate",
+            "exit"
+          ]
+        }
+      },
+      "id": "bf8008f1-bf00-42f0-94c3-1f79d40a14d9"
+    },
+    {
+      "name": "7. Gate Exit Again (expect fail - already used)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"correlationId\": \"{{exitCorrelationId}}\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/gate/exit",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "gate",
+            "exit"
+          ]
+        }
+      },
+      "id": "90ac9a8f-28b7-47a7-8626-3f891372c610"
+    },
+    {
+      "name": "8. Get Nonexistent Session (expect 404)",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/api/sessions/00000000-0000-0000-0000-000000000000",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "sessions",
+            "00000000-0000-0000-0000-000000000000"
+          ]
+        }
+      },
+      "id": "0724c485-5439-4548-a11e-479d21bc79f0"
+    }
+  ]
 }
