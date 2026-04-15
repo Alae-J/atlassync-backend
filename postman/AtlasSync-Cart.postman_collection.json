@@ -1,0 +1,160 @@
+{
+  "info": {
+    "_postman_id": "c9e7f1b2-cart-collection-2026",
+    "name": "AtlasSync Cart",
+    "description": "Shopping cart operations: add, remove, view, help, clear. Broadcasts via WebSocket /topic/cart/{sessionId}.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8083" },
+    { "key": "sessionId", "value": "PASTE_FROM_SESSIONS_COLLECTION" },
+    { "key": "userId", "value": "1" }
+  ],
+  "item": [
+    {
+      "id": "c1000001-0000-0000-0000-000000000001",
+      "name": "1. Add Barilla Spaghetti",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"barcode\": \"8076802085738\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/items",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "items"]
+        }
+      }
+    },
+    {
+      "id": "c1000002-0000-0000-0000-000000000002",
+      "name": "2. Add Coca-Cola",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"barcode\": \"5449000000996\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/items",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "items"]
+        }
+      }
+    },
+    {
+      "id": "c1000003-0000-0000-0000-000000000003",
+      "name": "3. Add Same Spaghetti Again (increments quantity)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"barcode\": \"8076802085738\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/items",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "items"]
+        }
+      }
+    },
+    {
+      "id": "c1000004-0000-0000-0000-000000000004",
+      "name": "4. Get Cart (should show 2 items)",
+      "request": {
+        "method": "GET",
+        "header": [
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}"]
+        }
+      }
+    },
+    {
+      "id": "c1000005-0000-0000-0000-000000000005",
+      "name": "5. Remove Coca-Cola",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/items/5449000000996",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "items", "5449000000996"]
+        }
+      }
+    },
+    {
+      "id": "c1000006-0000-0000-0000-000000000006",
+      "name": "6. Request Help (fires help.requested Kafka event)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"aisleNumber\": 3\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/help",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "help"]
+        }
+      }
+    },
+    {
+      "id": "c1000007-0000-0000-0000-000000000007",
+      "name": "7. Clear Cart",
+      "request": {
+        "method": "DELETE",
+        "header": [
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}"]
+        }
+      }
+    },
+    {
+      "id": "c1000008-0000-0000-0000-000000000008",
+      "name": "8. Add Unknown Product (expect 404)",
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-User-Id", "value": "{{userId}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n    \"barcode\": \"0000000000000\"\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/api/cart/{{sessionId}}/items",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "cart", "{{sessionId}}", "items"]
+        }
+      }
+    }
+  ]
+}
