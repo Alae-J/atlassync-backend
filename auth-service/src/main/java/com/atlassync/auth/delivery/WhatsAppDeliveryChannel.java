@@ -34,7 +34,7 @@ public class WhatsAppDeliveryChannel implements OtpDeliveryChannel {
     public void deliver(OtpDelivery delivery) {
         Map<String, Object> body = Map.of(
                 "messaging_product", "whatsapp",
-                "to",                stripLeadingPlus(delivery.phone()),
+                "to",                stripLeadingPlus(delivery.recipient()),
                 "type",              "template",
                 "template",          template(delivery.code())
         );
@@ -47,9 +47,9 @@ public class WhatsAppDeliveryChannel implements OtpDeliveryChannel {
                     .body(Map.class);
 
             String messageId = extractMessageId(response);
-            log.info("[delivery:whatsapp] queued id={} to={}", messageId, delivery.phone());
+            log.info("[delivery:whatsapp] queued id={} to={}", messageId, delivery.recipient());
         } catch (RestClientException ex) {
-            log.error("[delivery:whatsapp] failed for to={}: {}", delivery.phone(), ex.getMessage());
+            log.error("[delivery:whatsapp] failed for to={}: {}", delivery.recipient(), ex.getMessage());
             throw new DeliveryException("Failed to deliver OTP via WhatsApp Cloud API", ex);
         }
     }

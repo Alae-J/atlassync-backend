@@ -82,7 +82,7 @@ class OtpServiceTest {
 
     @Test
     void requestCreatesChallengeAndSendsSms() {
-        OtpRequestResponse response = service.request("+14155551111");
+        OtpRequestResponse response = service.requestForPhone("+14155551111");
 
         assertThat(response.correlationId()).isNotNull();
         assertThat(response.expiresInSeconds()).isEqualTo(300L);
@@ -98,8 +98,8 @@ class OtpServiceTest {
 
     @Test
     void requestExpiresPriorPendingChallengesForSamePhone() {
-        OtpRequestResponse first = service.request("+14155551111");
-        service.request("+14155551111");
+        OtpRequestResponse first = service.requestForPhone("+14155551111");
+        service.requestForPhone("+14155551111");
 
         OtpChallenge stale = challengeRepo.findById(first.correlationId()).orElseThrow();
         assertThat(stale.getStatus()).isEqualTo(OtpChallengeStatus.EXPIRED);
@@ -107,14 +107,14 @@ class OtpServiceTest {
 
     @Test
     void requestRateLimitsRepeatedCalls() {
-        for (int i = 0; i < 3; i++) service.request("+14155552222");
-        assertThatThrownBy(() -> service.request("+14155552222"))
+        for (int i = 0; i < 3; i++) service.requestForPhone("+14155552222");
+        assertThatThrownBy(() -> service.requestForPhone("+14155552222"))
                 .isInstanceOf(OtpRateLimitedException.class);
     }
 
     @Test
     void verifyAcceptsCorrectCodeAndCreatesUser() {
-        OtpRequestResponse req = service.request("+14155553333");
+        OtpRequestResponse req = service.requestForPhone("+14155553333");
         String code = deliveryChannel.lastCode();
 
         AuthResponse auth = service.verify(req.correlationId(), code);
@@ -133,7 +133,7 @@ class OtpServiceTest {
         existing.setRoles(Set.of(roleRepo.findByName("ROLE_CUSTOMER").orElseThrow()));
         userRepo.save(existing);
 
-        OtpRequestResponse req = service.request("+14155554444");
+        OtpRequestResponse req = service.requestForPhone("+14155554444");
         service.verify(req.correlationId(), deliveryChannel.lastCode());
 
         assertThat(userRepo.savedCount).isEqualTo(1);
@@ -141,7 +141,7 @@ class OtpServiceTest {
 
     @Test
     void verifyRejectsBadCode() {
-        OtpRequestResponse req = service.request("+14155555555");
+        OtpRequestResponse req = service.requestForPhone("+14155555555");
 
         assertThatThrownBy(() -> service.verify(req.correlationId(), "000000"))
                 .isInstanceOf(OtpInvalidCodeException.class);
@@ -153,7 +153,7 @@ class OtpServiceTest {
 
     @Test
     void verifyFailsAfterMaxAttempts() {
-        OtpRequestResponse req = service.request("+14155556666");
+        OtpRequestResponse req = service.requestForPhone("+14155556666");
         for (int i = 0; i < properties.maxAttempts(); i++) {
             try { service.verify(req.correlationId(), "000000"); } catch (OtpInvalidCodeException ignored) {}
         }
@@ -166,7 +166,7 @@ class OtpServiceTest {
 
     @Test
     void verifyRejectsExpiredChallenge() {
-        OtpRequestResponse req = service.request("+14155557777");
+        OtpRequestResponse req = service.requestForPhone("+14155557777");
         OtpChallenge ch = challengeRepo.findById(req.correlationId()).orElseThrow();
         ch.setExpiresAt(Instant.now().minusSeconds(1));
         challengeRepo.save(ch);
@@ -193,10 +193,10 @@ class OtpServiceTest {
             return Optional.ofNullable(store.get(id))
                     .filter(c -> c.getStatus() == status);
         }
-        @Override public int markPendingChallengesExpired(String phone) {
+        @Override public int markPendingChallengesExpired(String recipient) {
             int count = 0;
             for (OtpChallenge c : store.values()) {
-                if (c.getPhone().equals(phone) && c.getStatus() == OtpChallengeStatus.PENDING) {
+                if (c.getRecipient().equals(recipient) && c.getStatus() == OtpChallengeStatus.PENDING) {
                     c.setStatus(OtpChallengeStatus.EXPIRED);
                     count++;
                 }
@@ -303,7 +303,7 @@ class OtpServiceTest {
         OtpDelivery lastDelivery;
 
         @Override public void deliver(OtpDelivery delivery) {
-            sentTo.add(delivery.phone());
+            sentTo.add(delivery.recipient());
             lastDelivery = delivery;
         }
 

@@ -18,8 +18,8 @@ public interface OtpChallengeRepository extends JpaRepository<OtpChallenge, UUID
     @Modifying
     @Query("update OtpChallenge o " +
            "set o.status = com.atlassync.auth.entity.OtpChallengeStatus.EXPIRED " +
-           "where o.phone = :phone and o.status = com.atlassync.auth.entity.OtpChallengeStatus.PENDING")
-    int markPendingChallengesExpired(@Param("phone") String phone);
+           "where o.recipient = :recipient and o.status = com.atlassync.auth.entity.OtpChallengeStatus.PENDING")
+    int markPendingChallengesExpired(@Param("recipient") String recipient);
 
     @Modifying
     @Query("delete from OtpChallenge o where o.expiresAt < :cutoff")

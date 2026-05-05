@@ -15,6 +15,6 @@ public class LogDeliveryChannel implements OtpDeliveryChannel {
 
     @Override
     public void deliver(OtpDelivery delivery) {
-        log.info("[delivery:log] to={} message={}", delivery.phone(), delivery.displayMessage());
+        log.info("[delivery:log] to={} message={}", delivery.recipient(), delivery.displayMessage());
     }
 }

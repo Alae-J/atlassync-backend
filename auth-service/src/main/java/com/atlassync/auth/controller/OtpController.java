@@ -1,6 +1,7 @@
 package com.atlassync.auth.controller;
 
 import com.atlassync.auth.dto.AuthResponse;
+import com.atlassync.auth.dto.OtpEmailRequestRequest;
 import com.atlassync.auth.dto.OtpRequestRequest;
 import com.atlassync.auth.dto.OtpRequestResponse;
 import com.atlassync.auth.dto.OtpVerifyRequest;
@@ -25,11 +26,17 @@ public class OtpController {
 
     @PostMapping("/request")
     public ResponseEntity<OtpRequestResponse> request(@RequestBody @Valid OtpRequestRequest request) {
-        OtpRequestResponse response = otpService.request(request.phone());
+        OtpRequestResponse response = otpService.requestForPhone(request.phone());
         return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
     }
 
-    @PostMapping("/verify")
+    @PostMapping("/email/request")
+    public ResponseEntity<OtpRequestResponse> requestForEmail(@RequestBody @Valid OtpEmailRequestRequest request) {
+        OtpRequestResponse response = otpService.requestForEmail(request.email().trim().toLowerCase());
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(response);
+    }
+
+    @PostMapping({"/verify", "/email/verify"})
     public ResponseEntity<AuthResponse> verify(@RequestBody @Valid OtpVerifyRequest request) {
         AuthResponse response = otpService.verify(request.correlationId(), request.code());
         return ResponseEntity.ok(response);

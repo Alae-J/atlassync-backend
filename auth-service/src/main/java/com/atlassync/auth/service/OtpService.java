@@ -59,28 +59,20 @@ public class OtpService {
         this.properties = properties;
     }
 
+    /**
+     * Issues an OTP for a phone number. The user is created on first verify.
+     */
     @Transactional
-    public OtpRequestResponse request(String phone) {
-        enforceRateLimit(phone);
-        challengeRepository.markPendingChallengesExpired(phone);
+    public OtpRequestResponse requestForPhone(String phone) {
+        return issueChallenge(phone);
+    }
 
-        String code = generateCode(properties.codeLength());
-        Instant now = Instant.now();
-
-        var challenge = new OtpChallenge();
-        challenge.setPhone(phone);
-        challenge.setCodeHash(hash(code));
-        challenge.setStatus(OtpChallengeStatus.PENDING);
-        challenge.setExpiresAt(now.plus(properties.ttl()));
-        challenge = challengeRepository.save(challenge);
-
-        deliveryChannel.deliver(new OtpDelivery(phone, code, formatSms(code)));
-
-        return new OtpRequestResponse(
-                challenge.getId(),
-                properties.resendCooldown().toSeconds(),
-                properties.ttl().toSeconds()
-        );
+    /**
+     * Issues an OTP for an email address. The user is created on first verify.
+     */
+    @Transactional
+    public OtpRequestResponse requestForEmail(String email) {
+        return issueChallenge(email);
     }
 
     @Transactional
@@ -111,27 +103,56 @@ public class OtpService {
         challenge.setConsumedAt(now);
         challengeRepository.save(challenge);
 
-        User user = findOrCreateUserByPhone(challenge.getPhone());
+        User user = findOrCreateUser(challenge.getRecipient());
         return authService.issueTokensFor(user);
     }
 
-    private void enforceRateLimit(String phone) {
+    private OtpRequestResponse issueChallenge(String recipient) {
+        enforceRateLimit(recipient);
+        challengeRepository.markPendingChallengesExpired(recipient);
+
+        String code = generateCode(properties.codeLength());
+        Instant now = Instant.now();
+
+        var challenge = new OtpChallenge();
+        challenge.setRecipient(recipient);
+        challenge.setCodeHash(hash(code));
+        challenge.setStatus(OtpChallengeStatus.PENDING);
+        challenge.setExpiresAt(now.plus(properties.ttl()));
+        challenge = challengeRepository.save(challenge);
+
+        deliveryChannel.deliver(new OtpDelivery(recipient, code, formatMessage(code)));
+
+        return new OtpRequestResponse(
+                challenge.getId(),
+                properties.resendCooldown().toSeconds(),
+                properties.ttl().toSeconds()
+        );
+    }
+
+    private void enforceRateLimit(String recipient) {
         var limit = properties.rateLimit();
-        boolean ok = rateLimiter.tryAcquire(RATE_LIMIT_PREFIX + phone, limit.max(), limit.window());
+        boolean ok = rateLimiter.tryAcquire(RATE_LIMIT_PREFIX + recipient, limit.max(), limit.window());
         if (!ok) {
             throw new OtpRateLimitedException(
-                    "Too many OTP requests for this phone -- try again later",
+                    "Too many OTP requests for this recipient -- try again later",
                     limit.window()
             );
         }
     }
 
-    private User findOrCreateUserByPhone(String phone) {
-        return userRepository.findByPhone(phone).orElseGet(() -> {
+    private User findOrCreateUser(String recipient) {
+        boolean isEmail = recipient.contains("@");
+        var existing = isEmail
+                ? userRepository.findByEmail(recipient)
+                : userRepository.findByPhone(recipient);
+
+        return existing.orElseGet(() -> {
             var role = roleRepository.findByName(DEFAULT_ROLE)
                     .orElseThrow(() -> new IllegalStateException("Default role " + DEFAULT_ROLE + " missing"));
             var user = new User();
-            user.setPhone(phone);
+            if (isEmail) user.setEmail(recipient);
+            else user.setPhone(recipient);
             user.setRoles(Set.of(role));
             return userRepository.save(user);
         });
@@ -164,7 +185,7 @@ public class OtpService {
         return diff == 0;
     }
 
-    private String formatSms(String code) {
+    private String formatMessage(String code) {
         Duration ttl = properties.ttl();
         return "Your AtlasSync code is " + code + ". Expires in " + ttl.toMinutes() + " minutes.";
     }

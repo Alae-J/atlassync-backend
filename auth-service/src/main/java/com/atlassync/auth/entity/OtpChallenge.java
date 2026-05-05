@@ -19,8 +19,8 @@ public class OtpChallenge {
     @GeneratedValue(strategy = GenerationType.UUID)
     private UUID id;
 
-    @Column(nullable = false, length = 20)
-    private String phone;
+    @Column(nullable = false, length = 255)
+    private String recipient;
 
     @Column(name = "code_hash", nullable = false, length = 64)
     private String codeHash;

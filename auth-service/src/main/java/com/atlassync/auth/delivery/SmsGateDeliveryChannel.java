@@ -28,7 +28,7 @@ public class SmsGateDeliveryChannel implements OtpDeliveryChannel {
     public void deliver(OtpDelivery delivery) {
         var body = Map.of(
                 "message", delivery.displayMessage(),
-                "phoneNumbers", List.of(delivery.phone())
+                "phoneNumbers", List.of(delivery.recipient())
         );
         try {
             Map<?, ?> response = client.post()
@@ -39,9 +39,9 @@ public class SmsGateDeliveryChannel implements OtpDeliveryChannel {
                     .body(Map.class);
 
             String messageId = response != null ? String.valueOf(response.get("id")) : "?";
-            log.info("[delivery:smsgate] queued id={} to={}", messageId, delivery.phone());
+            log.info("[delivery:smsgate] queued id={} to={}", messageId, delivery.recipient());
         } catch (RestClientException ex) {
-            log.error("[delivery:smsgate] failed for to={}: {}", delivery.phone(), ex.getMessage());
+            log.error("[delivery:smsgate] failed for to={}: {}", delivery.recipient(), ex.getMessage());
             throw new DeliveryException("Failed to relay SMS via sms-gate.app", ex);
         }
     }
