@@ -5,6 +5,7 @@ import org.springframework.http.MediaType;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -54,21 +55,23 @@ public class WhatsAppDeliveryChannel implements OtpDeliveryChannel {
     }
 
     private Map<String, Object> template(String code) {
+        List<Map<String, Object>> components = new ArrayList<>(2);
+        components.add(Map.of(
+                "type",       "body",
+                "parameters", List.of(Map.of("type", "text", "text", code))
+        ));
+        if (Boolean.TRUE.equals(props.includeOtpButton())) {
+            components.add(Map.of(
+                    "type",       "button",
+                    "sub_type",   "url",
+                    "index",      "0",
+                    "parameters", List.of(Map.of("type", "text", "text", code))
+            ));
+        }
         return Map.of(
-                "name",     props.templateName(),
-                "language", Map.of("code", props.languageCode()),
-                "components", List.of(
-                        Map.of(
-                                "type",       "body",
-                                "parameters", List.of(Map.of("type", "text", "text", code))
-                        ),
-                        Map.of(
-                                "type",       "button",
-                                "sub_type",   "url",
-                                "index",      "0",
-                                "parameters", List.of(Map.of("type", "text", "text", code))
-                        )
-                )
+                "name",       props.templateName(),
+                "language",   Map.of("code", props.languageCode()),
+                "components", components
         );
     }
 

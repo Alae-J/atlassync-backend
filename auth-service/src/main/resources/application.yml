@@ -40,10 +40,11 @@ atlassync:
         password: ${SMSGATE_PASSWORD:}
       whatsapp:
         base-url: https://graph.facebook.com/v20.0
-        phone-number-id: ${WHATSAPP_PHONE_NUMBER_ID:}
-        access-token:    ${WHATSAPP_ACCESS_TOKEN:}
-        template-name:   ${WHATSAPP_TEMPLATE_NAME:atlassync_otp}
-        language-code:   ${WHATSAPP_LANGUAGE_CODE:en}
+        phone-number-id:    ${WHATSAPP_PHONE_NUMBER_ID:}
+        access-token:       ${WHATSAPP_ACCESS_TOKEN:}
+        template-name:      ${WHATSAPP_TEMPLATE_NAME:atlassync_otp}
+        language-code:      ${WHATSAPP_LANGUAGE_CODE:en}
+        include-otp-button: ${WHATSAPP_INCLUDE_OTP_BUTTON:true}
 
 management:
   endpoints:

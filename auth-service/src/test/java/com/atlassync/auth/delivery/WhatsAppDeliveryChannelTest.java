@@ -27,25 +27,30 @@ class WhatsAppDeliveryChannelTest {
             }
             """;
 
-    private MockRestServiceServer server;
-    private WhatsAppDeliveryChannel channel;
-
-    @BeforeEach
-    void setUp() {
-        RestClient.Builder builder = RestClient.builder();
-        server = MockRestServiceServer.bindTo(builder).build();
-        var props = new WhatsAppProperties(
+    private static WhatsAppProperties propsWithButton(boolean includeButton) {
+        return new WhatsAppProperties(
                 "https://example.test/v20.0",
                 "123456789",
                 "EAA-token",
                 "atlassync_otp",
-                "en"
+                "en",
+                includeButton
         );
-        channel = new WhatsAppDeliveryChannel(builder, props);
+    }
+
+    private RestClient.Builder builder;
+    private MockRestServiceServer server;
+
+    @BeforeEach
+    void setUp() {
+        builder = RestClient.builder();
+        server = MockRestServiceServer.bindTo(builder).build();
     }
 
     @Test
-    void postsTemplatePayloadToCloudApi() {
+    void includesAuthButtonComponentByDefault() {
+        var channel = new WhatsAppDeliveryChannel(builder, propsWithButton(true));
+
         server.expect(requestTo("https://example.test/v20.0/123456789/messages"))
                 .andExpect(method(HttpMethod.POST))
                 .andExpect(header("Authorization", "Bearer EAA-token"))
@@ -57,6 +62,8 @@ class WhatsAppDeliveryChannelTest {
                 .andExpect(jsonPath("$.template.language.code").value("en"))
                 .andExpect(jsonPath("$.template.components[0].type").value("body"))
                 .andExpect(jsonPath("$.template.components[0].parameters[0].text").value("482910"))
+                .andExpect(jsonPath("$.template.components[1].type").value("button"))
+                .andExpect(jsonPath("$.template.components[1].parameters[0].text").value("482910"))
                 .andRespond(withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON));
 
         channel.deliver(new OtpDelivery("+212600000000", "482910", "ignored for templates"));
@@ -64,7 +71,23 @@ class WhatsAppDeliveryChannelTest {
     }
 
     @Test
+    void omitsButtonComponentWhenDisabled() {
+        var channel = new WhatsAppDeliveryChannel(builder, propsWithButton(false));
+
+        server.expect(requestTo("https://example.test/v20.0/123456789/messages"))
+                .andExpect(jsonPath("$.template.components.length()").value(1))
+                .andExpect(jsonPath("$.template.components[0].type").value("body"))
+                .andExpect(jsonPath("$.template.components[0].parameters[0].text").value("482910"))
+                .andRespond(withSuccess(SUCCESS_BODY, MediaType.APPLICATION_JSON));
+
+        channel.deliver(new OtpDelivery("+212600000000", "482910", "ignored"));
+        server.verify();
+    }
+
+    @Test
     void wrapsApiFailuresInDeliveryException() {
+        var channel = new WhatsAppDeliveryChannel(builder, propsWithButton(true));
+
         server.expect(requestTo("https://example.test/v20.0/123456789/messages"))
                 .andRespond(withServerError());
 
@@ -76,23 +99,24 @@ class WhatsAppDeliveryChannelTest {
 
     @Test
     void rejectsBlankCredentialsAtConstruction() {
-        assertThatThrownBy(() -> new WhatsAppProperties(null, "", "tok", "tpl", "en"))
+        assertThatThrownBy(() -> new WhatsAppProperties(null, "", "tok", "tpl", "en", true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("phone-number-id");
 
-        assertThatThrownBy(() -> new WhatsAppProperties(null, "123", null, "tpl", "en"))
+        assertThatThrownBy(() -> new WhatsAppProperties(null, "123", null, "tpl", "en", true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("access-token");
 
-        assertThatThrownBy(() -> new WhatsAppProperties(null, "123", "tok", "", "en"))
+        assertThatThrownBy(() -> new WhatsAppProperties(null, "123", "tok", "", "en", true))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("template-name");
     }
 
     @Test
-    void usesDefaultBaseUrlAndLanguage() {
-        var props = new WhatsAppProperties(null, "123", "tok", "tpl", null);
+    void usesDefaultBaseUrlAndLanguageAndButton() {
+        var props = new WhatsAppProperties(null, "123", "tok", "tpl", null, null);
         assertThat(props.baseUrl()).isEqualTo("https://graph.facebook.com/v20.0");
         assertThat(props.languageCode()).isEqualTo("en");
+        assertThat(props.includeOtpButton()).isTrue();
     }
 }
