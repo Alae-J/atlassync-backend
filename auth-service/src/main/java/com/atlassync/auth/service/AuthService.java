@@ -120,6 +120,15 @@ public class AuthService {
         refreshTokenRepository.revokeByFamilyId(storedToken.getFamilyId(), RevocationReason.LOGOUT);
     }
 
+    /**
+     * Mints a fresh access + refresh token pair for the given user. Used by both
+     * password login/register and the phone-OTP verify flow.
+     */
+    @Transactional
+    public AuthResponse issueTokensFor(User user) {
+        return createTokenPair(user);
+    }
+
     private AuthResponse createTokenPair(User user) {
         UUID familyId = UUID.randomUUID();
         String rawRefreshToken = jwtService.generateRefreshToken();
