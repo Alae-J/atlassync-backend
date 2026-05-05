@@ -1,6 +1,8 @@
 package com.atlassync.auth.service;
 
 import com.atlassync.auth.config.OtpProperties;
+import com.atlassync.auth.delivery.OtpDelivery;
+import com.atlassync.auth.delivery.OtpDeliveryChannel;
 import com.atlassync.auth.dto.AuthResponse;
 import com.atlassync.auth.dto.OtpRequestResponse;
 import com.atlassync.auth.entity.OtpChallenge;
@@ -13,7 +15,6 @@ import com.atlassync.auth.ratelimit.RateLimiter;
 import com.atlassync.auth.repository.OtpChallengeRepository;
 import com.atlassync.auth.repository.RoleRepository;
 import com.atlassync.auth.repository.UserRepository;
-import com.atlassync.auth.sms.SmsSender;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,7 +37,7 @@ public class OtpService {
     private final OtpChallengeRepository challengeRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
-    private final SmsSender smsSender;
+    private final OtpDeliveryChannel deliveryChannel;
     private final RateLimiter rateLimiter;
     private final AuthService authService;
     private final OtpProperties properties;
@@ -45,14 +46,14 @@ public class OtpService {
     public OtpService(OtpChallengeRepository challengeRepository,
                       UserRepository userRepository,
                       RoleRepository roleRepository,
-                      SmsSender smsSender,
+                      OtpDeliveryChannel deliveryChannel,
                       RateLimiter rateLimiter,
                       AuthService authService,
                       OtpProperties properties) {
         this.challengeRepository = challengeRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
-        this.smsSender = smsSender;
+        this.deliveryChannel = deliveryChannel;
         this.rateLimiter = rateLimiter;
         this.authService = authService;
         this.properties = properties;
@@ -73,7 +74,7 @@ public class OtpService {
         challenge.setExpiresAt(now.plus(properties.ttl()));
         challenge = challengeRepository.save(challenge);
 
-        smsSender.send(phone, formatSms(code));
+        deliveryChannel.deliver(new OtpDelivery(phone, code, formatSms(code)));
 
         return new OtpRequestResponse(
                 challenge.getId(),

@@ -1,16 +1,12 @@
-package com.atlassync.auth.sms;
+package com.atlassync.auth.delivery;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 /**
- * Configuration for the sms-gate.app cloud gateway.
- * <p>
- * The gateway is a self-hosted Android relay that exposes a REST API; this app installed on a
- * phone with an Inwi SIM (or any other carrier) sends the actual SMS over the cellular network.
- * <p>
+ * Configuration for the sms-gate.app cloud relay (Android phone gateway).
  * Credentials come from the SMSGate Android app's "Cloud Server" tab.
  */
-@ConfigurationProperties(prefix = "atlassync.otp.sms.smsgate")
+@ConfigurationProperties(prefix = "atlassync.otp.delivery.smsgate")
 public record SmsGateProperties(
         String baseUrl,
         String username,
@@ -21,8 +17,8 @@ public record SmsGateProperties(
         if (baseUrl == null || baseUrl.isBlank()) {
             baseUrl = "https://api.sms-gate.app/3rdparty/v1";
         }
-        requireNonBlank(username, "atlassync.otp.sms.smsgate.username is required");
-        requireNonBlank(password, "atlassync.otp.sms.smsgate.password is required");
+        requireNonBlank(username, "atlassync.otp.delivery.smsgate.username is required");
+        requireNonBlank(password, "atlassync.otp.delivery.smsgate.password is required");
     }
 
     private static void requireNonBlank(String value, String message) {

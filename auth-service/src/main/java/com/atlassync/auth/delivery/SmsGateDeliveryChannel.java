@@ -1,4 +1,4 @@
-package com.atlassync.auth.sms;
+package com.atlassync.auth.delivery;
 
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.MediaType;
@@ -9,15 +9,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Sends SMS through the sms-gate.app cloud relay. Requires the SMSGate Android app (with an
- * active SIM) running in Cloud Server mode and reachable through Firebase push.
+ * Delivers OTPs as plain SMS through sms-gate.app, which relays them via an Android phone
+ * running the SMSGate app on a real SIM (free P2P SMS within the same carrier network).
  */
 @Slf4j
-public class SmsGateSender implements SmsSender {
+public class SmsGateDeliveryChannel implements OtpDeliveryChannel {
 
     private final RestClient client;
 
-    public SmsGateSender(RestClient.Builder builder, SmsGateProperties props) {
+    public SmsGateDeliveryChannel(RestClient.Builder builder, SmsGateProperties props) {
         this.client = builder
                 .baseUrl(props.baseUrl())
                 .defaultHeaders(headers -> headers.setBasicAuth(props.username(), props.password()))
@@ -25,10 +25,10 @@ public class SmsGateSender implements SmsSender {
     }
 
     @Override
-    public void send(String phone, String message) {
+    public void deliver(OtpDelivery delivery) {
         var body = Map.of(
-                "message", message,
-                "phoneNumbers", List.of(phone)
+                "message", delivery.displayMessage(),
+                "phoneNumbers", List.of(delivery.phone())
         );
         try {
             Map<?, ?> response = client.post()
@@ -39,10 +39,10 @@ public class SmsGateSender implements SmsSender {
                     .body(Map.class);
 
             String messageId = response != null ? String.valueOf(response.get("id")) : "?";
-            log.info("[sms-gate] queued message id={} to phone={}", messageId, phone);
+            log.info("[delivery:smsgate] queued id={} to={}", messageId, delivery.phone());
         } catch (RestClientException ex) {
-            log.error("[sms-gate] failed to relay SMS to phone={}: {}", phone, ex.getMessage());
-            throw new SmsDeliveryException("Failed to relay SMS via sms-gate.app", ex);
+            log.error("[delivery:smsgate] failed for to={}: {}", delivery.phone(), ex.getMessage());
+            throw new DeliveryException("Failed to relay SMS via sms-gate.app", ex);
         }
     }
 }

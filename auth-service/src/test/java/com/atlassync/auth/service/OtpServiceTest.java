@@ -1,6 +1,8 @@
 package com.atlassync.auth.service;
 
 import com.atlassync.auth.config.OtpProperties;
+import com.atlassync.auth.delivery.OtpDelivery;
+import com.atlassync.auth.delivery.OtpDeliveryChannel;
 import com.atlassync.auth.dto.AuthResponse;
 import com.atlassync.auth.dto.OtpRequestResponse;
 import com.atlassync.auth.entity.OtpChallenge;
@@ -15,7 +17,6 @@ import com.atlassync.auth.ratelimit.RateLimiter;
 import com.atlassync.auth.repository.OtpChallengeRepository;
 import com.atlassync.auth.repository.RoleRepository;
 import com.atlassync.auth.repository.UserRepository;
-import com.atlassync.auth.sms.SmsSender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -44,7 +45,7 @@ class OtpServiceTest {
     private FakeUserRepo userRepo;
     private RoleRepository roleRepo;
     private RateLimiter rateLimiter;
-    private RecordingSmsSender smsSender;
+    private RecordingDeliveryChannel deliveryChannel;
     private AuthService authService;
     private OtpService service;
 
@@ -60,7 +61,7 @@ class OtpServiceTest {
         challengeRepo = new FakeChallengeRepo();
         userRepo = new FakeUserRepo();
         rateLimiter = new InMemoryRateLimiter();
-        smsSender = new RecordingSmsSender();
+        deliveryChannel = new RecordingDeliveryChannel();
 
         roleRepo = mock(RoleRepository.class);
         Role customer = new Role();
@@ -75,7 +76,7 @@ class OtpServiceTest {
                 });
 
         service = new OtpService(
-                challengeRepo, userRepo, roleRepo, smsSender, rateLimiter, authService, properties
+                challengeRepo, userRepo, roleRepo, deliveryChannel, rateLimiter, authService, properties
         );
     }
 
@@ -85,8 +86,9 @@ class OtpServiceTest {
 
         assertThat(response.correlationId()).isNotNull();
         assertThat(response.expiresInSeconds()).isEqualTo(300L);
-        assertThat(smsSender.sentTo).containsExactly("+14155551111");
-        assertThat(smsSender.lastMessage).containsPattern("\\d{6}");
+        assertThat(deliveryChannel.sentTo).containsExactly("+14155551111");
+        assertThat(deliveryChannel.lastDelivery.code()).hasSize(6);
+        assertThat(deliveryChannel.lastDelivery.displayMessage()).containsPattern("\\d{6}");
         assertThat(challengeRepo.findById(response.correlationId()))
                 .hasValueSatisfying(c -> {
                     assertThat(c.getStatus()).isEqualTo(OtpChallengeStatus.PENDING);
@@ -113,7 +115,7 @@ class OtpServiceTest {
     @Test
     void verifyAcceptsCorrectCodeAndCreatesUser() {
         OtpRequestResponse req = service.request("+14155553333");
-        String code = smsSender.lastCode();
+        String code = deliveryChannel.lastCode();
 
         AuthResponse auth = service.verify(req.correlationId(), code);
 
@@ -132,7 +134,7 @@ class OtpServiceTest {
         userRepo.save(existing);
 
         OtpRequestResponse req = service.request("+14155554444");
-        service.verify(req.correlationId(), smsSender.lastCode());
+        service.verify(req.correlationId(), deliveryChannel.lastCode());
 
         assertThat(userRepo.savedCount).isEqualTo(1);
     }
@@ -169,7 +171,7 @@ class OtpServiceTest {
         ch.setExpiresAt(Instant.now().minusSeconds(1));
         challengeRepo.save(ch);
 
-        assertThatThrownBy(() -> service.verify(req.correlationId(), smsSender.lastCode()))
+        assertThatThrownBy(() -> service.verify(req.correlationId(), deliveryChannel.lastCode()))
                 .isInstanceOf(OtpChallengeExpiredException.class);
 
         OtpChallenge after = challengeRepo.findById(req.correlationId()).orElseThrow();
@@ -296,19 +298,18 @@ class OtpServiceTest {
         @Override public <S extends User, R> R findBy(org.springframework.data.domain.Example<S> example, java.util.function.Function<org.springframework.data.repository.query.FluentQuery.FetchableFluentQuery<S>, R> queryFunction) { throw new UnsupportedOperationException(); }
     }
 
-    private static class RecordingSmsSender implements SmsSender {
+    private static class RecordingDeliveryChannel implements OtpDeliveryChannel {
         final List<String> sentTo = new ArrayList<>();
-        String lastMessage;
+        OtpDelivery lastDelivery;
 
-        @Override public void send(String phone, String message) {
-            sentTo.add(phone);
-            lastMessage = message;
+        @Override public void deliver(OtpDelivery delivery) {
+            sentTo.add(delivery.phone());
+            lastDelivery = delivery;
         }
 
         String lastCode() {
-            var matcher = java.util.regex.Pattern.compile("\\d{6}").matcher(lastMessage);
-            if (!matcher.find()) throw new IllegalStateException("No code in: " + lastMessage);
-            return matcher.group();
+            if (lastDelivery == null) throw new IllegalStateException("No delivery captured");
+            return lastDelivery.code();
         }
     }
 }

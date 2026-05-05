@@ -1,4 +1,4 @@
-package com.atlassync.auth.sms;
+package com.atlassync.auth.delivery;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -7,6 +7,7 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.content;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
@@ -15,18 +16,17 @@ import static org.springframework.test.web.client.match.MockRestRequestMatchers.
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withServerError;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
-class SmsGateSenderTest {
+class SmsGateDeliveryChannelTest {
 
-    private RestClient.Builder builder;
     private MockRestServiceServer server;
-    private SmsGateSender sender;
+    private SmsGateDeliveryChannel channel;
 
     @BeforeEach
     void setUp() {
-        builder = RestClient.builder();
+        RestClient.Builder builder = RestClient.builder();
         server = MockRestServiceServer.bindTo(builder).build();
         var props = new SmsGateProperties("https://example.test/v1", "user", "pass");
-        sender = new SmsGateSender(builder, props);
+        channel = new SmsGateDeliveryChannel(builder, props);
     }
 
     @Test
@@ -41,17 +41,17 @@ class SmsGateSenderTest {
                 .andRespond(withSuccess("{\"id\":\"abc-123\",\"state\":\"Pending\"}",
                         MediaType.APPLICATION_JSON));
 
-        sender.send("+212600000000", "code 123456");
+        channel.deliver(new OtpDelivery("+212600000000", "123456", "code 123456"));
         server.verify();
     }
 
     @Test
-    void wrapsRemoteFailuresInSmsDeliveryException() {
+    void wrapsRemoteFailuresInDeliveryException() {
         server.expect(requestTo("https://example.test/v1/messages"))
                 .andRespond(withServerError());
 
-        assertThatThrownBy(() -> sender.send("+212600000001", "boom"))
-                .isInstanceOf(SmsDeliveryException.class);
+        assertThatThrownBy(() -> channel.deliver(new OtpDelivery("+212600000001", "111111", "boom")))
+                .isInstanceOf(DeliveryException.class);
         server.verify();
     }
 
@@ -69,7 +69,6 @@ class SmsGateSenderTest {
     @Test
     void usesPublicGatewayUrlWhenBaseUrlOmitted() {
         var props = new SmsGateProperties(null, "u", "p");
-        org.assertj.core.api.Assertions.assertThat(props.baseUrl())
-                .isEqualTo("https://api.sms-gate.app/3rdparty/v1");
+        assertThat(props.baseUrl()).isEqualTo("https://api.sms-gate.app/3rdparty/v1");
     }
 }

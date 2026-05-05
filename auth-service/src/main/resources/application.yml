@@ -32,8 +32,8 @@ atlassync:
     rate-limit:
       max: 3
       window: 15m
-    sms:
-      provider: ${OTP_SMS_PROVIDER:log}     # log | smsgate
+    delivery:
+      provider: ${OTP_DELIVERY_PROVIDER:log}   # log | smsgate | whatsapp
       smsgate:
         base-url: https://api.sms-gate.app/3rdparty/v1
         username: ${SMSGATE_USERNAME:}
