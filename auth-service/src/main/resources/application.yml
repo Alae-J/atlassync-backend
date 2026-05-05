@@ -33,7 +33,7 @@ atlassync:
       max: 3
       window: 15m
     delivery:
-      provider: ${OTP_DELIVERY_PROVIDER:log}   # log | smsgate | whatsapp
+      provider: ${OTP_DELIVERY_PROVIDER:log}   # log | smsgate | whatsapp | brevo
       smsgate:
         base-url: https://api.sms-gate.app/3rdparty/v1
         username: ${SMSGATE_USERNAME:}
@@ -45,6 +45,12 @@ atlassync:
         template-name:      ${WHATSAPP_TEMPLATE_NAME:atlassync_otp}
         language-code:      ${WHATSAPP_LANGUAGE_CODE:en}
         include-otp-button: ${WHATSAPP_INCLUDE_OTP_BUTTON:true}
+      brevo:
+        base-url:   https://api.brevo.com
+        api-key:    ${BREVO_API_KEY:}
+        from-email: ${BREVO_FROM_EMAIL:noreply@atlassync.local}
+        from-name:  ${BREVO_FROM_NAME:AtlasSync}
+        subject:    ${BREVO_SUBJECT:Your AtlasSync verification code}
 
 management:
   endpoints:
