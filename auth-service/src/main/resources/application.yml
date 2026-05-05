@@ -23,6 +23,18 @@ jwt:
   access-expiration: 900000
   refresh-expiration: 604800000
 
+atlassync:
+  otp:
+    code-length: 6
+    ttl: 5m
+    resend-cooldown: 30s
+    max-attempts: 5
+    rate-limit:
+      max: 3
+      window: 15m
+    sms:
+      provider: log
+
 management:
   endpoints:
     web:
