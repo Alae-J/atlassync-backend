@@ -21,14 +21,17 @@ public class User {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(nullable = false, unique = true, length = 100)
+    @Column(unique = true, length = 100)
     private String email;
 
-    @Column(nullable = false, unique = true, length = 50)
+    @Column(unique = true, length = 50)
     private String username;
 
-    @Column(nullable = false)
+    @Column
     private String password;
+
+    @Column(unique = true, length = 20)
+    private String phone;
 
     @Column(nullable = false)
     private boolean enabled = true;
@@ -56,11 +59,11 @@ public class User {
     public boolean equals(Object o) {
         if (this == o) return true;
         if (!(o instanceof User that)) return false;
-        return Objects.equals(email, that.email);
+        return id != null && Objects.equals(id, that.id);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hashCode(email);
+        return getClass().hashCode();
     }
 }

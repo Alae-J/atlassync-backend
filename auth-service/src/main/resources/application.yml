@@ -23,6 +23,29 @@ jwt:
   access-expiration: 900000
   refresh-expiration: 604800000
 
+atlassync:
+  otp:
+    code-length: 6
+    ttl: 5m
+    resend-cooldown: 30s
+    max-attempts: 5
+    rate-limit:
+      max: 3
+      window: 15m
+    delivery:
+      provider: ${OTP_DELIVERY_PROVIDER:log}   # log | smsgate | whatsapp
+      smsgate:
+        base-url: https://api.sms-gate.app/3rdparty/v1
+        username: ${SMSGATE_USERNAME:}
+        password: ${SMSGATE_PASSWORD:}
+      whatsapp:
+        base-url: https://graph.facebook.com/v20.0
+        phone-number-id:    ${WHATSAPP_PHONE_NUMBER_ID:}
+        access-token:       ${WHATSAPP_ACCESS_TOKEN:}
+        template-name:      ${WHATSAPP_TEMPLATE_NAME:atlassync_otp}
+        language-code:      ${WHATSAPP_LANGUAGE_CODE:en}
+        include-otp-button: ${WHATSAPP_INCLUDE_OTP_BUTTON:true}
+
 management:
   endpoints:
     web:
