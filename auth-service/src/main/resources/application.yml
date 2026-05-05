@@ -33,7 +33,11 @@ atlassync:
       max: 3
       window: 15m
     sms:
-      provider: log
+      provider: ${OTP_SMS_PROVIDER:log}     # log | smsgate
+      smsgate:
+        base-url: https://api.sms-gate.app/3rdparty/v1
+        username: ${SMSGATE_USERNAME:}
+        password: ${SMSGATE_PASSWORD:}
 
 management:
   endpoints:
