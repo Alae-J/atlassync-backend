@@ -51,6 +51,12 @@ atlassync:
         from-email: ${BREVO_FROM_EMAIL:noreply@atlassync.local}
         from-name:  ${BREVO_FROM_NAME:AtlasSync}
         subject:    ${BREVO_SUBJECT:Your AtlasSync verification code}
+  email:
+    brevo:
+      base-url:   https://api.brevo.com
+      api-key:    ${BREVO_API_KEY:}
+      from-email: ${BREVO_FROM_EMAIL:noreply@atlassync.local}
+      from-name:  ${BREVO_FROM_NAME:AtlasSync}
 
 management:
   endpoints:

@@ -72,7 +72,7 @@ class OtpServiceTest {
         when(authService.issueTokensFor(any(User.class)))
                 .thenAnswer(inv -> {
                     User u = inv.getArgument(0);
-                    return new AuthResponse("a", "r", u.getId(), u.getEmail(), "ROLE_CUSTOMER");
+                    return new AuthResponse("a", "r", u.getId(), u.getEmail(), u.getUsername(), "ROLE_CUSTOMER");
                 });
 
         service = new OtpService(
