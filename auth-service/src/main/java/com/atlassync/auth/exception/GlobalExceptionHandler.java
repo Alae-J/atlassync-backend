@@ -76,6 +76,14 @@ public class GlobalExceptionHandler {
                 .body(problem);
     }
 
+    @ExceptionHandler(EmailAlreadyVerifiedException.class)
+    public ProblemDetail handleEmailAlreadyVerified(EmailAlreadyVerifiedException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setType(URI.create("https://atlassync.com/errors/email-already-verified"));
+        problem.setTitle("Email Already Verified");
+        return problem;
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidation(MethodArgumentNotValidException ex) {
         Map<String, String> fieldErrors = ex.getBindingResult().getFieldErrors().stream()
