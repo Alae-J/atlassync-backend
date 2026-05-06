@@ -41,6 +41,7 @@ public class JwtService {
                 .subject(String.valueOf(user.getId()))
                 .claim("email", user.getEmail())
                 .claim("role", roleName)
+                .claim("email_verified", user.isEmailVerified())
                 .issuedAt(now)
                 .expiration(expiry)
                 .signWith(signingKey)

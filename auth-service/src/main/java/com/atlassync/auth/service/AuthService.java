@@ -113,7 +113,8 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), user.getUsername(), roleName);
+        return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
+                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
     }
 
     @Transactional
@@ -143,7 +144,8 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), user.getUsername(), roleName);
+        return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
+                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
     }
 
     private void persistRefreshToken(String rawToken, UUID familyId, User user) {
