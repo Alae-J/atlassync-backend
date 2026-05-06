@@ -16,6 +16,9 @@ public interface OtpChallengeRepository extends JpaRepository<OtpChallenge, UUID
 
     Optional<OtpChallenge> findByIdAndStatusAndPurpose(UUID id, OtpChallengeStatus status, OtpPurpose purpose);
 
+    Optional<OtpChallenge> findFirstByRecipientAndStatusAndPurposeOrderByCreatedAtDesc(
+            String recipient, OtpChallengeStatus status, OtpPurpose purpose);
+
     @Modifying
     @Query("update OtpChallenge o " +
            "set o.status = com.atlassync.auth.entity.OtpChallengeStatus.EXPIRED " +

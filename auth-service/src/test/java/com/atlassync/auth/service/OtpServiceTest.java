@@ -195,6 +195,14 @@ class OtpServiceTest {
             return Optional.ofNullable(store.get(id))
                     .filter(c -> c.getStatus() == status && c.getPurpose() == purpose);
         }
+        @Override public Optional<OtpChallenge> findFirstByRecipientAndStatusAndPurposeOrderByCreatedAtDesc(
+                String recipient, OtpChallengeStatus status, OtpPurpose purpose) {
+            return store.values().stream()
+                    .filter(c -> recipient.equals(c.getRecipient())
+                            && c.getStatus() == status
+                            && c.getPurpose() == purpose)
+                    .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+        }
         @Override public int markPendingChallengesExpired(String recipient, OtpPurpose purpose) {
             int count = 0;
             for (OtpChallenge c : store.values()) {
