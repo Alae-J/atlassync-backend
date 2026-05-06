@@ -1,6 +1,5 @@
 package com.atlassync.auth.ratelimit;
 
-import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
@@ -10,7 +9,6 @@ import java.util.Deque;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
-@ConditionalOnMissingBean(RateLimiter.class)
 public class InMemoryRateLimiter implements RateLimiter {
 
     private final ConcurrentHashMap<String, Deque<Instant>> hits = new ConcurrentHashMap<>();
