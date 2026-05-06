@@ -2,6 +2,7 @@ package com.atlassync.auth.exception;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -45,6 +46,34 @@ public class GlobalExceptionHandler {
         problem.setType(URI.create("https://atlassync.com/errors/token-reuse"));
         problem.setTitle("Token Reuse Detected");
         return problem;
+    }
+
+    @ExceptionHandler(OtpInvalidCodeException.class)
+    public ProblemDetail handleOtpInvalid(OtpInvalidCodeException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, ex.getMessage());
+        problem.setType(URI.create("https://atlassync.com/errors/otp-invalid-code"));
+        problem.setTitle("Invalid OTP Code");
+        return problem;
+    }
+
+    @ExceptionHandler(OtpChallengeExpiredException.class)
+    public ProblemDetail handleOtpExpired(OtpChallengeExpiredException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.GONE, ex.getMessage());
+        problem.setType(URI.create("https://atlassync.com/errors/otp-expired"));
+        problem.setTitle("OTP Challenge Expired");
+        return problem;
+    }
+
+    @ExceptionHandler(OtpRateLimitedException.class)
+    public ResponseEntity<ProblemDetail> handleOtpRateLimit(OtpRateLimitedException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.TOO_MANY_REQUESTS, ex.getMessage());
+        problem.setType(URI.create("https://atlassync.com/errors/otp-rate-limited"));
+        problem.setTitle("Too Many OTP Requests");
+        long retryAfterSeconds = ex.getRetryAfter().toSeconds();
+        problem.setProperty("retryAfterSeconds", retryAfterSeconds);
+        return ResponseEntity.status(HttpStatus.TOO_MANY_REQUESTS)
+                .header("Retry-After", String.valueOf(retryAfterSeconds))
+                .body(problem);
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

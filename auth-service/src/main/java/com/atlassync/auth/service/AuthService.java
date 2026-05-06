@@ -4,6 +4,7 @@ import com.atlassync.auth.dto.AuthResponse;
 import com.atlassync.auth.dto.LoginRequest;
 import com.atlassync.auth.dto.RefreshRequest;
 import com.atlassync.auth.dto.RegisterRequest;
+import com.atlassync.auth.email.EmailService;
 import com.atlassync.auth.entity.RefreshToken;
 import com.atlassync.auth.entity.RevocationReason;
 import com.atlassync.auth.entity.User;
@@ -30,17 +31,20 @@ public class AuthService {
     private final RefreshTokenRepository refreshTokenRepository;
     private final JwtService jwtService;
     private final PasswordEncoder passwordEncoder;
+    private final EmailService emailService;
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
                        RefreshTokenRepository refreshTokenRepository,
                        JwtService jwtService,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       EmailService emailService) {
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.refreshTokenRepository = refreshTokenRepository;
         this.jwtService = jwtService;
         this.passwordEncoder = passwordEncoder;
+        this.emailService = emailService;
     }
 
     @Transactional
@@ -61,6 +65,8 @@ public class AuthService {
         user.setPassword(passwordEncoder.encode(request.password()));
         user.setRoles(Set.of(customerRole));
         user = userRepository.save(user);
+
+        emailService.sendWelcome(user.getEmail(), user.getUsername());
 
         return createTokenPair(user);
     }
@@ -107,7 +113,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), roleName);
+        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), user.getUsername(), roleName);
     }
 
     @Transactional
@@ -120,6 +126,15 @@ public class AuthService {
         refreshTokenRepository.revokeByFamilyId(storedToken.getFamilyId(), RevocationReason.LOGOUT);
     }
 
+    /**
+     * Mints a fresh access + refresh token pair for the given user. Used by both
+     * password login/register and the phone-OTP verify flow.
+     */
+    @Transactional
+    public AuthResponse issueTokensFor(User user) {
+        return createTokenPair(user);
+    }
+
     private AuthResponse createTokenPair(User user) {
         UUID familyId = UUID.randomUUID();
         String rawRefreshToken = jwtService.generateRefreshToken();
@@ -128,7 +143,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), roleName);
+        return new AuthResponse(accessToken, rawRefreshToken, user.getId(), user.getEmail(), user.getUsername(), roleName);
     }
 
     private void persistRefreshToken(String rawToken, UUID familyId, User user) {
