@@ -27,8 +27,20 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final SecretKey key;
 
+    /**
+     * Endpoints reachable without a JWT. The auth-service has its own routes that
+     * require an authenticated caller (e.g. {@code /api/auth/email/**}); those are
+     * deliberately NOT in this list so the gateway forwards an {@code X-User-Id}
+     * derived from a verified token.
+     */
     private static final List<String> OPEN_PATHS = List.of(
-            "/api/auth/", "/actuator/", "/ws/"
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/otp/",
+            "/actuator/",
+            "/ws/"
     );
 
     public JwtAuthenticationFilter(@Value("${jwt.secret}") String secret) {
