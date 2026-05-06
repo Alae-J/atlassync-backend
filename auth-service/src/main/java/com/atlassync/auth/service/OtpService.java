@@ -7,6 +7,7 @@ import com.atlassync.auth.dto.AuthResponse;
 import com.atlassync.auth.dto.OtpRequestResponse;
 import com.atlassync.auth.entity.OtpChallenge;
 import com.atlassync.auth.entity.OtpChallengeStatus;
+import com.atlassync.auth.entity.OtpPurpose;
 import com.atlassync.auth.entity.User;
 import com.atlassync.auth.exception.OtpChallengeExpiredException;
 import com.atlassync.auth.exception.OtpInvalidCodeException;
@@ -77,7 +78,8 @@ public class OtpService {
 
     @Transactional
     public AuthResponse verify(UUID correlationId, String code) {
-        var challenge = challengeRepository.findByIdAndStatus(correlationId, OtpChallengeStatus.PENDING)
+        var challenge = challengeRepository.findByIdAndStatusAndPurpose(
+                        correlationId, OtpChallengeStatus.PENDING, OtpPurpose.LOGIN)
                 .orElseThrow(() -> new OtpInvalidCodeException("OTP challenge not found"));
 
         Instant now = Instant.now();
@@ -109,7 +111,7 @@ public class OtpService {
 
     private OtpRequestResponse issueChallenge(String recipient) {
         enforceRateLimit(recipient);
-        challengeRepository.markPendingChallengesExpired(recipient);
+        challengeRepository.markPendingChallengesExpired(recipient, OtpPurpose.LOGIN);
 
         String code = generateCode(properties.codeLength());
         Instant now = Instant.now();
@@ -118,6 +120,7 @@ public class OtpService {
         challenge.setRecipient(recipient);
         challenge.setCodeHash(hash(code));
         challenge.setStatus(OtpChallengeStatus.PENDING);
+        challenge.setPurpose(OtpPurpose.LOGIN);
         challenge.setExpiresAt(now.plus(properties.ttl()));
         challenge = challengeRepository.save(challenge);
 
