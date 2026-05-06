@@ -19,13 +19,8 @@ import com.atlassync.auth.repository.UserRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
-import java.security.NoSuchAlgorithmException;
-import java.security.SecureRandom;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.HexFormat;
 import java.util.Set;
 import java.util.UUID;
 
@@ -42,7 +37,6 @@ public class OtpService {
     private final RateLimiter rateLimiter;
     private final AuthService authService;
     private final OtpProperties properties;
-    private final SecureRandom random = new SecureRandom();
 
     public OtpService(OtpChallengeRepository challengeRepository,
                       UserRepository userRepository,
@@ -96,7 +90,7 @@ public class OtpService {
         }
 
         challenge.setAttempts(challenge.getAttempts() + 1);
-        if (!constantTimeEquals(hash(code), challenge.getCodeHash())) {
+        if (!OtpCodes.constantTimeEquals(OtpCodes.hash(code), challenge.getCodeHash())) {
             challengeRepository.save(challenge);
             throw new OtpInvalidCodeException("Invalid OTP code");
         }
@@ -113,12 +107,12 @@ public class OtpService {
         enforceRateLimit(recipient);
         challengeRepository.markPendingChallengesExpired(recipient, OtpPurpose.LOGIN);
 
-        String code = generateCode(properties.codeLength());
+        String code = OtpCodes.generate(properties.codeLength());
         Instant now = Instant.now();
 
         var challenge = new OtpChallenge();
         challenge.setRecipient(recipient);
-        challenge.setCodeHash(hash(code));
+        challenge.setCodeHash(OtpCodes.hash(code));
         challenge.setStatus(OtpChallengeStatus.PENDING);
         challenge.setPurpose(OtpPurpose.LOGIN);
         challenge.setExpiresAt(now.plus(properties.ttl()));
@@ -159,33 +153,6 @@ public class OtpService {
             user.setRoles(Set.of(role));
             return userRepository.save(user);
         });
-    }
-
-    private String generateCode(int length) {
-        StringBuilder builder = new StringBuilder(length);
-        for (int i = 0; i < length; i++) {
-            builder.append(random.nextInt(10));
-        }
-        return builder.toString();
-    }
-
-    private String hash(String code) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("SHA-256");
-            byte[] bytes = digest.digest(code.getBytes(StandardCharsets.UTF_8));
-            return HexFormat.of().formatHex(bytes);
-        } catch (NoSuchAlgorithmException e) {
-            throw new IllegalStateException("SHA-256 not available", e);
-        }
-    }
-
-    private static boolean constantTimeEquals(String a, String b) {
-        if (a == null || b == null || a.length() != b.length()) return false;
-        int diff = 0;
-        for (int i = 0; i < a.length(); i++) {
-            diff |= a.charAt(i) ^ b.charAt(i);
-        }
-        return diff == 0;
     }
 
     private String formatMessage(String code) {
