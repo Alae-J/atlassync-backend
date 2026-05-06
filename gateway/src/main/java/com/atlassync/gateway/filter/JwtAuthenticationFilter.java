@@ -71,11 +71,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             String userId = claims.getSubject();
             String email = claims.get("email", String.class);
             String role = claims.get("role", String.class);
+            Boolean emailVerified = claims.get("email_verified", Boolean.class);
 
             ServerHttpRequest mutated = exchange.getRequest().mutate()
                     .header("X-User-Id", userId != null ? userId : "")
                     .header("X-User-Email", email != null ? email : "")
                     .header("X-User-Role", role != null ? role : "")
+                    .header("X-Email-Verified", String.valueOf(Boolean.TRUE.equals(emailVerified)))
                     .build();
 
             return chain.filter(exchange.mutate().request(mutated).build());

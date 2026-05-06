@@ -41,4 +41,13 @@ public class GlobalExceptionHandler {
         problem.setProperty("timestamp", Instant.now());
         return problem;
     }
+
+    @ExceptionHandler(EmailNotVerifiedException.class)
+    public ProblemDetail handleEmailNotVerified(EmailNotVerifiedException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+        problem.setTitle("Email Not Verified");
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("code", "email_not_verified");
+        return problem;
+    }
 }
