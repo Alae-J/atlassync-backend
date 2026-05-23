@@ -32,12 +32,13 @@ public class ProductController {
 
     @GetMapping("/search")
     public List<ProductDto> search(
-            @RequestParam String query,
-            @RequestParam(defaultValue = "10") int limit) {
-        return productService.searchByName(query, limit)
-                .stream()
-                .map(ProductMapper::toDto)
-                .toList();
+            @RequestParam(required = false, defaultValue = "") String query,
+            @RequestParam(required = false) Integer aisle,
+            @RequestParam(defaultValue = "20") int limit) {
+        var products = aisle != null
+                ? productService.searchByNameInAisle(query, aisle, limit)
+                : productService.searchByName(query, limit);
+        return products.stream().map(ProductMapper::toDto).toList();
     }
 
     @GetMapping("/batch")
