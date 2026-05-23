@@ -3,7 +3,9 @@ package com.atlassync.session.service;
 import com.atlassync.session.dto.*;
 import com.atlassync.session.entity.*;
 import com.atlassync.session.exception.*;
+import com.atlassync.session.integration.CartSnapshotClient;
 import com.atlassync.session.repository.QrTokenRepository;
+import com.atlassync.session.repository.SessionLineItemRepository;
 import com.atlassync.session.repository.SessionRepository;
 import com.atlassync.session.repository.SessionStateTransitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -13,8 +15,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -25,9 +29,11 @@ public class SessionService {
 
     private final SessionRepository sessionRepository;
     private final SessionStateTransitionRepository transitionRepository;
+    private final SessionLineItemRepository lineItemRepository;
     private final QrTokenRepository qrTokenRepository;
     private final QrSigningService qrSigningService;
     private final SessionEventProducer eventProducer;
+    private final CartSnapshotClient cartSnapshotClient;
     private final ObjectMapper objectMapper;
 
     @Transactional
@@ -86,6 +92,8 @@ public class SessionService {
 
         SessionStatus fromState = session.getStatus();
         session.transitionTo(SessionStatus.COMPLETED);
+        session.setCompletedAt(Instant.now());
+        snapshotCartIntoSession(session);
         sessionRepository.save(session);
 
         recordTransition(session, fromState, SessionStatus.COMPLETED, "payment-service", null);
@@ -97,6 +105,34 @@ public class SessionService {
 
         log.info("Payment completed for session={}, exit QR generated", sessionId);
         return new PaymentResponse(session.getId(), session.getStatus().name(), exitQr);
+    }
+
+    /**
+     * Pulls the cart for this session and freezes it into {@code session_line_items}.
+     * Cart-service holds carts in Redis with a TTL, so without this snapshot the
+     * receipt would vanish once the cart key expires.
+     */
+    private void snapshotCartIntoSession(ShoppingSession session) {
+        CartSnapshotClient.CartSnapshot cart = cartSnapshotClient.fetch(session.getId());
+        List<SessionLineItem> lineItems = cart.items().stream()
+                .map((item) -> {
+                    SessionLineItem entity = new SessionLineItem();
+                    entity.setSession(session);
+                    entity.setBarcode(item.productId());
+                    entity.setProductName(item.productName());
+                    entity.setQuantity(item.quantity());
+                    entity.setUnitPrice(item.priceAtAddition());
+                    entity.setLineTotal(item.priceAtAddition().multiply(BigDecimal.valueOf(item.quantity())));
+                    entity.setImageUrl(item.imageUrl());
+                    entity.setAddedAt(item.addedAt());
+                    return entity;
+                })
+                .toList();
+        if (!lineItems.isEmpty()) {
+            lineItemRepository.saveAll(lineItems);
+        }
+        session.setTotalAmount(cart.total());
+        session.setItemCount(cart.itemCount());
     }
 
     @Transactional
@@ -140,6 +176,63 @@ public class SessionService {
     public SessionResponse getSession(UUID sessionId) {
         ShoppingSession session = findSessionOrThrow(sessionId);
         return toSessionResponse(session);
+    }
+
+    /**
+     * Receipt view — the session plus its frozen line items. Used by Order
+     * Detail / Receipt on the mobile app.
+     */
+    @Transactional(readOnly = true)
+    public ReceiptResponse getReceipt(UUID sessionId, Long userId) {
+        ShoppingSession session = findSessionOrThrow(sessionId);
+        verifyOwnership(session, userId);
+
+        List<ReceiptResponse.LineItem> items = lineItemRepository
+                .findBySessionIdOrderByIdAsc(sessionId)
+                .stream()
+                .map((entity) -> new ReceiptResponse.LineItem(
+                        entity.getBarcode(),
+                        entity.getProductName(),
+                        entity.getQuantity(),
+                        entity.getUnitPrice(),
+                        entity.getLineTotal(),
+                        entity.getImageUrl(),
+                        entity.getAddedAt()
+                ))
+                .toList();
+
+        return new ReceiptResponse(
+                session.getId(),
+                session.getUserId(),
+                session.getStoreId(),
+                session.getStatus().name(),
+                session.getCreatedAt(),
+                session.getCompletedAt(),
+                session.getTotalAmount(),
+                session.getItemCount(),
+                items
+        );
+    }
+
+    /**
+     * History list for the logged-in user. Newest sessions first. Pageable so
+     * the Orders tab can ask for "all" or fall back to the most recent N.
+     */
+    @Transactional(readOnly = true)
+    public List<SessionHistoryItem> getHistory(Long userId, int limit) {
+        return sessionRepository
+                .findByUserIdOrderByCreatedAtDesc(userId, org.springframework.data.domain.PageRequest.of(0, limit))
+                .stream()
+                .map((session) -> new SessionHistoryItem(
+                        session.getId(),
+                        session.getStoreId(),
+                        session.getStatus().name(),
+                        session.getCreatedAt(),
+                        session.getCompletedAt(),
+                        session.getTotalAmount(),
+                        session.getItemCount()
+                ))
+                .toList();
     }
 
     /**

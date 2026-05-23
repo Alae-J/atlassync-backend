@@ -6,6 +6,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.Set;
@@ -40,6 +41,15 @@ public class ShoppingSession {
 
     @Column(name = "expires_at")
     private Instant expiresAt;
+
+    @Column(name = "completed_at")
+    private Instant completedAt;
+
+    @Column(name = "total_amount", precision = 10, scale = 2)
+    private BigDecimal totalAmount;
+
+    @Column(name = "item_count")
+    private Integer itemCount;
 
     @Version
     @Column(name = "version", nullable = false)
