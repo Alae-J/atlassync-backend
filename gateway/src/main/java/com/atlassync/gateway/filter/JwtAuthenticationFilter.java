@@ -27,8 +27,20 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
     private final SecretKey key;
 
+    /**
+     * Endpoints reachable without a JWT. The auth-service has its own routes that
+     * require an authenticated caller (e.g. {@code /api/auth/email/**}); those are
+     * deliberately NOT in this list so the gateway forwards an {@code X-User-Id}
+     * derived from a verified token.
+     */
     private static final List<String> OPEN_PATHS = List.of(
-            "/api/auth/", "/actuator/", "/ws/"
+            "/api/auth/login",
+            "/api/auth/register",
+            "/api/auth/refresh",
+            "/api/auth/logout",
+            "/api/auth/otp/",
+            "/actuator/",
+            "/ws/"
     );
 
     public JwtAuthenticationFilter(@Value("${jwt.secret}") String secret) {
@@ -59,11 +71,13 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             String userId = claims.getSubject();
             String email = claims.get("email", String.class);
             String role = claims.get("role", String.class);
+            Boolean emailVerified = claims.get("email_verified", Boolean.class);
 
             ServerHttpRequest mutated = exchange.getRequest().mutate()
                     .header("X-User-Id", userId != null ? userId : "")
                     .header("X-User-Email", email != null ? email : "")
                     .header("X-User-Role", role != null ? role : "")
+                    .header("X-Email-Verified", String.valueOf(Boolean.TRUE.equals(emailVerified)))
                     .build();
 
             return chain.filter(exchange.mutate().request(mutated).build());

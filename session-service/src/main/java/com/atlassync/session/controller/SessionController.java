@@ -1,6 +1,7 @@
 package com.atlassync.session.controller;
 
 import com.atlassync.session.dto.*;
+import com.atlassync.session.exception.EmailNotVerifiedException;
 import com.atlassync.session.service.SessionService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -19,12 +20,20 @@ public class SessionController {
     @PostMapping("/start")
     public ResponseEntity<StartSessionResponse> startSession(
             @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @RequestHeader(value = "X-Email-Verified", required = false) String emailVerifiedHeader,
             @RequestParam(value = "userId", required = false) Long paramUserId,
             @RequestBody(required = false) StartSessionRequest request) {
 
         Long userId = headerUserId != null ? headerUserId : paramUserId;
         if (userId == null) {
             throw new IllegalArgumentException("userId is required via X-User-Id header or userId param");
+        }
+
+        // Gate the start of a shopping session on a verified email. Other endpoints
+        // (pay, cancel) intentionally don't gate -- once a session exists, the user
+        // can always finish or back out of it.
+        if (headerUserId != null && !"true".equalsIgnoreCase(emailVerifiedHeader)) {
+            throw new EmailNotVerifiedException("Verify your email before starting a session");
         }
 
         Long storeId = request != null ? request.storeId() : null;

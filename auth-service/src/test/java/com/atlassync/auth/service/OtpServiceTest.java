@@ -7,6 +7,7 @@ import com.atlassync.auth.dto.AuthResponse;
 import com.atlassync.auth.dto.OtpRequestResponse;
 import com.atlassync.auth.entity.OtpChallenge;
 import com.atlassync.auth.entity.OtpChallengeStatus;
+import com.atlassync.auth.entity.OtpPurpose;
 import com.atlassync.auth.entity.Role;
 import com.atlassync.auth.entity.User;
 import com.atlassync.auth.exception.OtpChallengeExpiredException;
@@ -72,7 +73,8 @@ class OtpServiceTest {
         when(authService.issueTokensFor(any(User.class)))
                 .thenAnswer(inv -> {
                     User u = inv.getArgument(0);
-                    return new AuthResponse("a", "r", u.getId(), u.getEmail(), u.getUsername(), "ROLE_CUSTOMER");
+                    return new AuthResponse("a", "r", u.getId(), u.getEmail(), u.getUsername(),
+                            "ROLE_CUSTOMER", u.isEmailVerified());
                 });
 
         service = new OtpService(
@@ -189,14 +191,24 @@ class OtpServiceTest {
     private static class FakeChallengeRepo implements OtpChallengeRepository {
         private final Map<UUID, OtpChallenge> store = new HashMap<>();
 
-        @Override public Optional<OtpChallenge> findByIdAndStatus(UUID id, OtpChallengeStatus status) {
+        @Override public Optional<OtpChallenge> findByIdAndStatusAndPurpose(UUID id, OtpChallengeStatus status, OtpPurpose purpose) {
             return Optional.ofNullable(store.get(id))
-                    .filter(c -> c.getStatus() == status);
+                    .filter(c -> c.getStatus() == status && c.getPurpose() == purpose);
         }
-        @Override public int markPendingChallengesExpired(String recipient) {
+        @Override public Optional<OtpChallenge> findFirstByRecipientAndStatusAndPurposeOrderByCreatedAtDesc(
+                String recipient, OtpChallengeStatus status, OtpPurpose purpose) {
+            return store.values().stream()
+                    .filter(c -> recipient.equals(c.getRecipient())
+                            && c.getStatus() == status
+                            && c.getPurpose() == purpose)
+                    .max((a, b) -> a.getCreatedAt().compareTo(b.getCreatedAt()));
+        }
+        @Override public int markPendingChallengesExpired(String recipient, OtpPurpose purpose) {
             int count = 0;
             for (OtpChallenge c : store.values()) {
-                if (c.getRecipient().equals(recipient) && c.getStatus() == OtpChallengeStatus.PENDING) {
+                if (c.getRecipient().equals(recipient)
+                        && c.getStatus() == OtpChallengeStatus.PENDING
+                        && c.getPurpose() == purpose) {
                     c.setStatus(OtpChallengeStatus.EXPIRED);
                     count++;
                 }

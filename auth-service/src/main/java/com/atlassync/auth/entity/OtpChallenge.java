@@ -29,6 +29,10 @@ public class OtpChallenge {
     @Column(nullable = false, length = 16)
     private OtpChallengeStatus status = OtpChallengeStatus.PENDING;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private OtpPurpose purpose = OtpPurpose.LOGIN;
+
     @Column(nullable = false)
     private int attempts = 0;
 
