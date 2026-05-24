@@ -8,6 +8,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.List;
 import java.util.UUID;
 
 @RestController
@@ -44,6 +45,32 @@ public class SessionController {
     @GetMapping("/{id}")
     public ResponseEntity<SessionResponse> getSession(@PathVariable UUID id) {
         return ResponseEntity.ok(sessionService.getSession(id));
+    }
+
+    @GetMapping("/{id}/receipt")
+    public ResponseEntity<ReceiptResponse> getReceipt(
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @RequestParam(value = "userId", required = false) Long paramUserId) {
+
+        Long userId = headerUserId != null ? headerUserId : paramUserId;
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required via X-User-Id header or userId param");
+        }
+        return ResponseEntity.ok(sessionService.getReceipt(id, userId));
+    }
+
+    @GetMapping("/history")
+    public ResponseEntity<List<SessionHistoryItem>> getHistory(
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @RequestParam(value = "userId", required = false) Long paramUserId,
+            @RequestParam(defaultValue = "20") int limit) {
+
+        Long userId = headerUserId != null ? headerUserId : paramUserId;
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required via X-User-Id header or userId param");
+        }
+        return ResponseEntity.ok(sessionService.getHistory(userId, limit));
     }
 
     @PostMapping("/{id}/pay")
