@@ -19,4 +19,13 @@ public interface ProductRepository extends JpaRepository<Product, Long> {
 
     @Query("SELECT p FROM Product p WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%'))")
     List<Product> searchByNameContainingIgnoreCase(@Param("query") String query, Pageable pageable);
+
+    @Query("SELECT p FROM Product p " +
+           "WHERE LOWER(p.name) LIKE LOWER(CONCAT('%', :query, '%')) " +
+           "AND p.aisleNumber = :aisle")
+    List<Product> searchByNameAndAisle(@Param("query") String query,
+                                       @Param("aisle") Integer aisle,
+                                       Pageable pageable);
+
+    List<Product> findByAisleNumber(Integer aisleNumber, Pageable pageable);
 }

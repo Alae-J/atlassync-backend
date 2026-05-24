@@ -52,4 +52,11 @@ public class ProductService {
     public List<Product> searchByName(String query, int limit) {
         return productRepository.searchByNameContainingIgnoreCase(query, PageRequest.of(0, limit));
     }
+
+    public List<Product> searchByNameInAisle(String query, Integer aisle, int limit) {
+        if (query == null || query.isBlank()) {
+            return productRepository.findByAisleNumber(aisle, PageRequest.of(0, limit));
+        }
+        return productRepository.searchByNameAndAisle(query, aisle, PageRequest.of(0, limit));
+    }
 }
