@@ -13,6 +13,7 @@ import com.atlassync.auth.exception.TokenReuseException;
 import com.atlassync.auth.repository.RefreshTokenRepository;
 import com.atlassync.auth.repository.RoleRepository;
 import com.atlassync.auth.repository.UserRepository;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.UUID;
 
 @Service
+@Slf4j
 public class AuthService {
 
     private final UserRepository userRepository;
@@ -48,10 +50,13 @@ public class AuthService {
 
     @Transactional
     public AuthResponse register(RegisterRequest request) {
+        log.info("[auth] register attempt email={} username={}", request.email(), request.username());
         if (userRepository.existsByEmail(request.email())) {
+            log.warn("[auth] register rejected — email already registered: {}", request.email());
             throw new DuplicateResourceException("Email already registered");
         }
         if (userRepository.existsByUsername(request.username())) {
+            log.warn("[auth] register rejected — username taken: {}", request.username());
             throw new DuplicateResourceException("Username already taken");
         }
 
@@ -72,13 +77,19 @@ public class AuthService {
 
     @Transactional
     public AuthResponse login(LoginRequest request) {
+        log.info("[auth] login attempt email={}", request.email());
         var user = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new BadCredentialsException("Invalid email or password"));
+                .orElseThrow(() -> {
+                    log.warn("[auth] login failed — no user for email={}", request.email());
+                    return new BadCredentialsException("Invalid email or password");
+                });
 
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            log.warn("[auth] login failed — bad password for email={}", request.email());
             throw new BadCredentialsException("Invalid email or password");
         }
 
+        log.info("[auth] login ok userId={} email={}", user.getId(), user.getEmail());
         return createTokenPair(user);
     }
 
