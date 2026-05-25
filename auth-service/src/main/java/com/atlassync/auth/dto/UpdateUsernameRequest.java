@@ -6,7 +6,8 @@ import jakarta.validation.constraints.Size;
 
 public record UpdateUsernameRequest(
         @NotBlank
-        @Size(min = 3, max = 30)
-        @Pattern(regexp = "^[a-zA-Z0-9_.-]+$", message = "Letters, numbers, dot, underscore, dash only")
+        @Size(min = 2, max = 60)
+        @Pattern(regexp = "^[^\\s].*[^\\s]$|^[^\\s]$",
+                message = "Cannot start or end with whitespace")
         String username
 ) {}
