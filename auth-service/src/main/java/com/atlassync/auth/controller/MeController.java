@@ -5,10 +5,12 @@ import com.atlassync.auth.dto.ChangePasswordRequest;
 import com.atlassync.auth.dto.EmailVerificationSentResponse;
 import com.atlassync.auth.dto.PhoneLinkRequest;
 import com.atlassync.auth.dto.PhoneVerifyRequest;
+import com.atlassync.auth.dto.UpdatePreferencesRequest;
 import com.atlassync.auth.dto.UpdateUsernameRequest;
 import com.atlassync.auth.service.AuthService;
 import com.atlassync.auth.service.PhoneLinkService;
 import com.atlassync.auth.service.UserAccountService;
+import com.atlassync.auth.service.UserPreferencesService;
 import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -32,13 +34,16 @@ public class MeController {
 
     private final UserAccountService userAccountService;
     private final PhoneLinkService phoneLinkService;
+    private final UserPreferencesService preferencesService;
     private final AuthService authService;
 
     public MeController(UserAccountService userAccountService,
                         PhoneLinkService phoneLinkService,
+                        UserPreferencesService preferencesService,
                         AuthService authService) {
         this.userAccountService = userAccountService;
         this.phoneLinkService = phoneLinkService;
+        this.preferencesService = preferencesService;
         this.authService = authService;
     }
 
@@ -81,5 +86,14 @@ public class MeController {
         var user = userAccountService.load(userId);
         var linked = phoneLinkService.verifyAndLink(user, request.phone(), request.code());
         return ResponseEntity.ok(authService.issueTokensFor(linked));
+    }
+
+    @PatchMapping("/preferences")
+    public ResponseEntity<AuthResponse> updatePreferences(
+            @RequestHeader("X-User-Id") Long userId,
+            @RequestBody @Valid UpdatePreferencesRequest request) {
+        log.info("[me] PATCH /preferences userId={}", userId);
+        var user = preferencesService.update(userId, request);
+        return ResponseEntity.ok(authService.issueTokensFor(user));
     }
 }
