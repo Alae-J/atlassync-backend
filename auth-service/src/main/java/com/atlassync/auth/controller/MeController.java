@@ -10,6 +10,7 @@ import com.atlassync.auth.service.AuthService;
 import com.atlassync.auth.service.PhoneLinkService;
 import com.atlassync.auth.service.UserAccountService;
 import jakarta.validation.Valid;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestController;
  */
 @RestController
 @RequestMapping("/api/auth/me")
+@Slf4j
 public class MeController {
 
     private final UserAccountService userAccountService;
@@ -44,8 +46,8 @@ public class MeController {
     public ResponseEntity<AuthResponse> updateUsername(
             @RequestHeader("X-User-Id") Long userId,
             @RequestBody @Valid UpdateUsernameRequest request) {
+        log.info("[me] PATCH /username userId={} value=\"{}\"", userId, request.username());
         var user = userAccountService.updateUsername(userId, request.username());
-        // Reissue tokens so the JWT and AuthResponse carry the fresh username.
         return ResponseEntity.ok(authService.issueTokensFor(user));
     }
 
@@ -53,6 +55,7 @@ public class MeController {
     public ResponseEntity<Void> changePassword(
             @RequestHeader("X-User-Id") Long userId,
             @RequestBody @Valid ChangePasswordRequest request) {
+        log.info("[me] POST /password userId={}", userId);
         userAccountService.changePassword(userId, request.currentPassword(), request.newPassword());
         return ResponseEntity.noContent().build();
     }
@@ -61,6 +64,7 @@ public class MeController {
     public ResponseEntity<EmailVerificationSentResponse> requestPhoneCode(
             @RequestHeader("X-User-Id") Long userId,
             @RequestBody @Valid PhoneLinkRequest request) {
+        log.info("[me] POST /phone/request userId={} phone={}", userId, request.phone());
         var user = userAccountService.load(userId);
         var result = phoneLinkService.requestCode(user, request.phone());
         return ResponseEntity.accepted().body(new EmailVerificationSentResponse(
@@ -73,6 +77,7 @@ public class MeController {
     public ResponseEntity<AuthResponse> verifyPhone(
             @RequestHeader("X-User-Id") Long userId,
             @RequestBody @Valid PhoneVerifyRequest request) {
+        log.info("[me] POST /phone/verify userId={} phone={}", userId, request.phone());
         var user = userAccountService.load(userId);
         var linked = phoneLinkService.verifyAndLink(user, request.phone(), request.code());
         return ResponseEntity.ok(authService.issueTokensFor(linked));
