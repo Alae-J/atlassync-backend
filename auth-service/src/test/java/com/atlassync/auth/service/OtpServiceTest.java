@@ -74,7 +74,7 @@ class OtpServiceTest {
                 .thenAnswer(inv -> {
                     User u = inv.getArgument(0);
                     return new AuthResponse("a", "r", u.getId(), u.getEmail(), u.getUsername(),
-                            "ROLE_CUSTOMER", u.isEmailVerified());
+                            "ROLE_CUSTOMER", u.isEmailVerified(), u.getPhone());
                 });
 
         service = new OtpService(

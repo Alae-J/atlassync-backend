@@ -124,7 +124,8 @@ public class AuthService {
         String roleName = user.getRoles().iterator().next().getName();
 
         return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
-                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
+                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified(),
+                user.getPhone());
     }
 
     @Transactional
@@ -155,7 +156,8 @@ public class AuthService {
         String roleName = user.getRoles().iterator().next().getName();
 
         return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
-                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
+                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified(),
+                user.getPhone());
     }
 
     private void persistRefreshToken(String rawToken, UUID familyId, User user) {
