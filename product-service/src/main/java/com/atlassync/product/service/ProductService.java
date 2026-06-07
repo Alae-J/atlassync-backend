@@ -28,9 +28,13 @@ public class ProductService {
     public Optional<Product> findByBarcode(String barcode) {
         log.debug("Cache miss for barcode: {}", barcode);
 
-        Optional<Product> product = productRepository.findByBarcode(barcode);
-        if (product.isPresent()) {
-            return product;
+        // Cameras (especially iOS) return EAN-13 codes starting with '0' as their
+        // UPC-A 12-digit equivalent — same code, just with the leading zero
+        // stripped. Try every plausible form against the DB before falling back
+        // to OFF.
+        for (String candidate : normaliseCandidates(barcode)) {
+            Optional<Product> hit = productRepository.findByBarcode(candidate);
+            if (hit.isPresent()) return hit;
         }
 
         log.info("Product not in DB, trying Open Food Facts: {}", barcode);
@@ -46,7 +50,34 @@ public class ProductService {
     }
 
     public List<Product> findByBarcodes(List<String> barcodes) {
-        return productRepository.findByBarcodeIn(barcodes);
+        // Cart refresh path — normalise each barcode so UPC-A / EAN-13 equivalents
+        // both resolve. Done eagerly so the IN query hits all plausible forms.
+        List<String> expanded = barcodes.stream()
+                .flatMap(bc -> normaliseCandidates(bc).stream())
+                .distinct()
+                .toList();
+        return productRepository.findByBarcodeIn(expanded);
+    }
+
+    /**
+     * Returns every barcode form worth checking against the DB. UPC-A (12) and
+     * EAN-13 (13 with leading 0) are mathematically the same code, so a scan of
+     * either form should resolve to the same product.
+     */
+    private static List<String> normaliseCandidates(String barcode) {
+        if (barcode == null || barcode.isBlank()) return List.of();
+        String trimmed = barcode.trim();
+        if (!trimmed.matches("\\d+")) return List.of(trimmed);
+
+        if (trimmed.length() == 12) {
+            // UPC-A scanned -> also try the EAN-13 form with a leading 0.
+            return List.of(trimmed, "0" + trimmed);
+        }
+        if (trimmed.length() == 13 && trimmed.startsWith("0")) {
+            // EAN-13 with leading 0 -> also try the UPC-A form.
+            return List.of(trimmed, trimmed.substring(1));
+        }
+        return List.of(trimmed);
     }
 
     public List<Product> searchByName(String query, int limit) {
