@@ -24,4 +24,13 @@ public interface RefreshTokenRepository extends JpaRepository<RefreshToken, UUID
             """)
     int revokeByFamilyId(@Param("familyId") UUID familyId,
                          @Param("reason") com.atlassync.auth.entity.RevocationReason reason);
+
+    @Modifying
+    @Query("""
+            UPDATE RefreshToken rt
+            SET rt.revoked = true, rt.revocationReason = :reason
+            WHERE rt.user.id = :userId AND rt.revoked = false
+            """)
+    int revokeAllForUser(@Param("userId") Long userId,
+                         @Param("reason") com.atlassync.auth.entity.RevocationReason reason);
 }
