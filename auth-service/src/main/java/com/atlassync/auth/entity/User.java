@@ -50,7 +50,7 @@ public class User {
 
     // ── Preferences (Account → Preferences tab) ─────────────────────────
     // All nullable / default-empty so existing rows pre-V6 read as "no
-    // preference" with sensible mobile-side defaults (USD, no flagged
+    // preference" with sensible mobile-side defaults (MAD, no flagged
     // allergens, etc.). Language lives elsewhere — surfaced as "Coming
     // soon" until the i18n setup lands.
 
@@ -58,7 +58,7 @@ public class User {
     private Long defaultStoreId;
 
     @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode = "USD";
+    private String currencyCode = "MAD";
 
     @JdbcTypeCode(SqlTypes.ARRAY)
     @Column(name = "dietary_prefs", columnDefinition = "text[]")
