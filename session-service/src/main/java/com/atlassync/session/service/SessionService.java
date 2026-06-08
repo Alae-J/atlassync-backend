@@ -16,7 +16,10 @@ import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
@@ -41,6 +44,21 @@ public class SessionService {
     private final ObjectMapper objectMapper;
     private final StripeService stripeService;
     private final StripeCustomerService stripeCustomerService;
+
+    /**
+     * Self-injected reference for invoking @Transactional methods through the
+     * Spring proxy (avoids the proxy-bypass that direct {@code this.method()}
+     * calls suffer from). Used for the self-heal path that needs to commit
+     * markPaidFromWebhook's writes BEFORE we throw the IllegalStateException
+     * back to the caller — without the proxy, the writes would join the
+     * outer transaction and roll back.
+     */
+    private SessionService self;
+
+    @Autowired
+    public void setSelf(@Lazy SessionService self) {
+        this.self = self;
+    }
 
     @Transactional
     public StartSessionResponse startSession(Long userId, Long storeId) {
@@ -139,10 +157,12 @@ public class SessionService {
                                 existing.getCurrency().toUpperCase());
 
                     case "succeeded":
-                        // Self-heal: charge cleared but webhook is late.
+                        // Self-heal: charge cleared but webhook is late. Commit the
+                        // markPaid writes in a separate transaction so the surrounding
+                        // IllegalStateException rollback doesn't undo them.
                         log.warn("[stripe] paymentIntent {} already succeeded for session={}, self-healing",
                                 existing.getId(), sessionId);
-                        markPaidFromWebhook(sessionId);
+                        self.selfHealMarkPaid(sessionId);
                         throw new IllegalStateException("Session already paid");
 
                     case "canceled":
@@ -263,6 +283,21 @@ public class SessionService {
 
         log.info("[stripe-webhook] session={} marked COMPLETED, exit QR generated",
                 sessionId);
+    }
+
+    /**
+     * Self-heal entry point — runs {@link #markPaidFromWebhook} in a brand-new
+     * transaction so the writes survive even if the caller's transaction is
+     * about to be rolled back (the {@code createPaymentIntent} succeeded-intent
+     * path throws after calling us).
+     *
+     * <p>Must be called via {@code self.selfHealMarkPaid(...)} not
+     * {@code this.selfHealMarkPaid(...)} — the latter bypasses the proxy and
+     * the {@code REQUIRES_NEW} propagation has no effect.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void selfHealMarkPaid(UUID sessionId) {
+        markPaidFromWebhook(sessionId);
     }
 
     /**
