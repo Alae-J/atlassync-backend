@@ -16,6 +16,7 @@ import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -81,6 +82,7 @@ public class StripeService {
                         PaymentIntentCreateParams.AutomaticPaymentMethods.builder()
                                 .setEnabled(true)
                                 .build())
+                .putExtraParam("automatic_tax", Map.of("enabled", true))
                 .putMetadata("session_id", sessionId.toString())
                 .setDescription("AtlasSync · session " + sessionId);
 
