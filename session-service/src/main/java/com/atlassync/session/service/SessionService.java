@@ -90,14 +90,23 @@ public class SessionService {
         ShoppingSession session = findSessionOrThrow(sessionId);
         verifyOwnership(session, userId);
 
-        // CartSnapshotClient.fetch returns a CartSnapshot record with a
-        // `total` (BigDecimal) field — use that directly.
+        // Refuse new intents once the session has reached a terminal state.
+        // Phase C will add REFUNDED / PARTIAL_REFUND / DISPUTED / CHARGEBACK_LOST
+        // to this guard — for now COMPLETED is the only one that exists.
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Session " + sessionId + " has reached terminal status COMPLETED "
+                            + "— no more payment intents.");
+        }
+
         BigDecimal amount = cartSnapshotClient.fetch(sessionId).total();
         if (amount == null || amount.signum() <= 0) {
             throw new IllegalStateException(
                     "Refusing to create payment intent for empty cart");
         }
 
+        // Resolve the Stripe customer BEFORE state transitions or intent creation
+        // — failure here shouldn't strand the session in PAYING.
         String customerId;
         try {
             customerId = stripeCustomerService.getOrCreate(userId, email);
@@ -106,16 +115,68 @@ public class SessionService {
             throw new RuntimeException("Could not get Stripe customer: " + e.getMessage(), e);
         }
 
+        // Try to reuse an existing intent first.
+        if (session.getStripePaymentIntentId() != null) {
+            try {
+                PaymentIntent existing = stripeService.retrievePaymentIntent(
+                        session.getStripePaymentIntentId());
+                String existingStatus = existing.getStatus();
+                session.setStripeIntentStatus(existingStatus);
+
+                switch (existingStatus) {
+                    case "requires_payment_method":
+                    case "requires_confirmation":
+                    case "requires_action":
+                    case "processing":
+                        log.info("[stripe] reusing existing paymentIntent {} for session={} (status={})",
+                                existing.getId(), sessionId, existingStatus);
+                        sessionRepository.save(session);
+                        return new PaymentIntentResponse(
+                                sessionId,
+                                existing.getId(),
+                                existing.getClientSecret(),
+                                amount,
+                                existing.getCurrency().toUpperCase());
+
+                    case "succeeded":
+                        // Self-heal: charge cleared but webhook is late.
+                        log.warn("[stripe] paymentIntent {} already succeeded for session={}, self-healing",
+                                existing.getId(), sessionId);
+                        markPaidFromWebhook(sessionId);
+                        throw new IllegalStateException("Session already paid");
+
+                    case "canceled":
+                    default:
+                        // Stale or canceled — fall through to mint a new one.
+                        session.setStripePaymentIntentId(null);
+                        session.setStripeIntentStatus(null);
+                        break;
+                }
+            } catch (StripeException e) {
+                // Couldn't reach Stripe; treat as transient and rethrow.
+                throw new RuntimeException(
+                        "Could not retrieve existing paymentIntent: " + e.getMessage(), e);
+            }
+        }
+
+        // Transition into PAYING (idempotent on PAYING).
         SessionStatus fromState = session.getStatus();
         if (fromState != SessionStatus.PAYING) {
             session.transitionTo(SessionStatus.PAYING);
-            sessionRepository.save(session);
             recordTransition(session, fromState, SessionStatus.PAYING,
                     "user:" + userId, null);
         }
 
+        // Build deterministic idempotency key — bumps when @Version bumps.
+        String idempotencyKey = "session-" + sessionId + "-v" + session.getVersion();
+
         try {
-            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount, customerId, null);
+            PaymentIntent intent = stripeService.createPaymentIntent(
+                    sessionId, amount, customerId, idempotencyKey);
+            session.setStripePaymentIntentId(intent.getId());
+            session.setStripeIntentStatus(intent.getStatus());
+            sessionRepository.save(session);
+
             return new PaymentIntentResponse(
                     sessionId,
                     intent.getId(),
