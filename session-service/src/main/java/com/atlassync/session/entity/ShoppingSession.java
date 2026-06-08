@@ -51,6 +51,12 @@ public class ShoppingSession {
     @Column(name = "item_count")
     private Integer itemCount;
 
+    @Column(name = "stripe_payment_intent_id", length = 64)
+    private String stripePaymentIntentId;
+
+    @Column(name = "stripe_intent_status", length = 32)
+    private String stripeIntentStatus;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
