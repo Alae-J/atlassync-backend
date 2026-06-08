@@ -1,5 +1,6 @@
 package com.atlassync.session.payment;
 
+import com.atlassync.session.exception.IllegalStateTransitionException;
 import com.atlassync.session.service.SessionService;
 import com.stripe.exception.SignatureVerificationException;
 import com.stripe.model.Event;
@@ -75,11 +76,26 @@ public class StripeWebhookController {
                         intent.getId());
                 return ResponseEntity.ok("missing metadata");
             }
+            UUID sessionId;
             try {
-                UUID sessionId = UUID.fromString(sessionIdStr);
+                sessionId = UUID.fromString(sessionIdStr);
+            } catch (IllegalArgumentException e) {
+                log.warn("[stripe-webhook] paymentIntent={} malformed session_id={}",
+                        intent.getId(), sessionIdStr);
+                return ResponseEntity.ok("bad_metadata");
+            }
+
+            try {
                 sessionService.markPaidFromWebhook(sessionId);
+            } catch (IllegalStateTransitionException e) {
+                // The session is in an unexpected state (e.g. CANCELLED). Retrying
+                // won't help — ack to stop Stripe's retry storm. Investigate via the
+                // warn log instead.
+                log.error("[stripe-webhook] session={} state conflict, acking to stop retries: {}",
+                        sessionId, e.getMessage());
+                return ResponseEntity.ok("state_conflict");
             } catch (Exception e) {
-                log.error("[stripe-webhook] failed to complete session={}", sessionIdStr, e);
+                log.error("[stripe-webhook] failed to complete session={}", sessionId, e);
                 // Return 500 so Stripe retries — webhook re-delivery is fine,
                 // markPaidFromWebhook is idempotent.
                 return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
