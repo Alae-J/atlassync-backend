@@ -40,6 +40,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
             "/api/auth/logout",
             "/api/auth/otp/",
             "/api/auth/password/reset/",
+            "/api/sessions/webhooks/",
             "/actuator/",
             "/ws/"
     );
