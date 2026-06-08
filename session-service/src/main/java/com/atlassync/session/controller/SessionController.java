@@ -77,13 +77,15 @@ public class SessionController {
     public ResponseEntity<PaymentIntentResponse> createPaymentIntent(
             @PathVariable UUID id,
             @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @RequestHeader(value = "X-User-Email", required = false) String email,
             @RequestParam(value = "userId", required = false) Long paramUserId) {
 
         Long userId = headerUserId != null ? headerUserId : paramUserId;
         if (userId == null) {
-            throw new IllegalArgumentException("userId is required via X-User-Id header or userId param");
+            throw new IllegalArgumentException(
+                    "userId is required via X-User-Id header or userId param");
         }
-        PaymentIntentResponse response = sessionService.createPaymentIntent(id, userId);
+        PaymentIntentResponse response = sessionService.createPaymentIntent(id, userId, email);
         return ResponseEntity.ok(response);
     }
 

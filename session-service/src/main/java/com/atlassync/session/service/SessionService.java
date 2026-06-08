@@ -4,6 +4,7 @@ import com.atlassync.session.dto.*;
 import com.atlassync.session.entity.*;
 import com.atlassync.session.exception.*;
 import com.atlassync.session.integration.CartSnapshotClient;
+import com.atlassync.session.payment.StripeCustomerService;
 import com.atlassync.session.payment.StripeService;
 import com.atlassync.session.repository.QrTokenRepository;
 import com.atlassync.session.repository.SessionLineItemRepository;
@@ -39,6 +40,7 @@ public class SessionService {
     private final CartSnapshotClient cartSnapshotClient;
     private final ObjectMapper objectMapper;
     private final StripeService stripeService;
+    private final StripeCustomerService stripeCustomerService;
 
     @Transactional
     public StartSessionResponse startSession(Long userId, Long storeId) {
@@ -84,7 +86,7 @@ public class SessionService {
      * client — so a tampered client can't pay 1 MAD for 200 MAD of stuff.
      */
     @Transactional
-    public PaymentIntentResponse createPaymentIntent(UUID sessionId, Long userId) {
+    public PaymentIntentResponse createPaymentIntent(UUID sessionId, Long userId, String email) {
         ShoppingSession session = findSessionOrThrow(sessionId);
         verifyOwnership(session, userId);
 
@@ -104,8 +106,16 @@ public class SessionService {
                     "user:" + userId, null);
         }
 
+        String customerId;
         try {
-            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount);
+            customerId = stripeCustomerService.getOrCreate(userId, email);
+        } catch (StripeException e) {
+            log.error("[stripe] failed to get/create customer for user={}", userId, e);
+            throw new RuntimeException("Could not get Stripe customer: " + e.getMessage(), e);
+        }
+
+        try {
+            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount, customerId);
             return new PaymentIntentResponse(
                     sessionId,
                     intent.getId(),

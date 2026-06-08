@@ -56,13 +56,17 @@ public class StripeService {
      * currency unit (centimes for MAD). The {@code session_id} is stamped on
      * {@code metadata} so the webhook can route the event back to the right
      * session without trusting the client.
+     *
+     * <p>{@code customerId} is the Stripe {@code cus_…} id. Pass {@code null}
+     * for users without a customer record yet; the intent will still be created
+     * but won't be attached to a Stripe Customer.
      */
-    public PaymentIntent createPaymentIntent(UUID sessionId, BigDecimal amount) throws StripeException {
+    public PaymentIntent createPaymentIntent(UUID sessionId, BigDecimal amount, String customerId) throws StripeException {
         long amountMinor = amount.setScale(2, RoundingMode.HALF_UP)
                 .movePointRight(2)
                 .longValueExact();
 
-        PaymentIntentCreateParams params = PaymentIntentCreateParams.builder()
+        PaymentIntentCreateParams.Builder builder = PaymentIntentCreateParams.builder()
                 .setAmount(amountMinor)
                 .setCurrency(properties.currency())
                 .setAutomaticPaymentMethods(
@@ -70,12 +74,15 @@ public class StripeService {
                                 .setEnabled(true)
                                 .build())
                 .putMetadata("session_id", sessionId.toString())
-                .setDescription("AtlasSync · session " + sessionId)
-                .build();
+                .setDescription("AtlasSync · session " + sessionId);
 
-        PaymentIntent intent = PaymentIntent.create(params);
-        log.info("[stripe] paymentIntent created session={} amount={} {} id={}",
-                sessionId, amountMinor, properties.currency(), intent.getId());
+        if (customerId != null && !customerId.isBlank()) {
+            builder.setCustomer(customerId);
+        }
+
+        PaymentIntent intent = PaymentIntent.create(builder.build());
+        log.info("[stripe] paymentIntent created session={} customer={} amount={} {} id={}",
+                sessionId, customerId, amountMinor, properties.currency(), intent.getId());
         return intent;
     }
 
