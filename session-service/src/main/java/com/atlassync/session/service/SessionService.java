@@ -371,8 +371,12 @@ public class SessionService {
                 : null;
 
         try {
+            String idempotencyKey = String.format("refund-%s-%s-%s",
+                    sessionId,
+                    amountMinor != null ? amountMinor.toString() : "full",
+                    reason != null ? reason : "");
             Refund refund = stripeService.refund(
-                    session.getStripePaymentIntentId(), amountMinor, reason);
+                    session.getStripePaymentIntentId(), amountMinor, reason, idempotencyKey);
             return new RefundResponse(
                     sessionId,
                     refund.getId(),

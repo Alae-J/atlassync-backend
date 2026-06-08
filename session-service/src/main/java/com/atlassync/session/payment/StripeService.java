@@ -102,7 +102,7 @@ public class StripeService {
         return PaymentIntent.retrieve(paymentIntentId);
     }
 
-    public Refund refund(String paymentIntentId, Long amountMinor, String reason) throws StripeException {
+    public Refund refund(String paymentIntentId, Long amountMinor, String reason, String idempotencyKey) throws StripeException {
         RefundCreateParams.Builder builder = RefundCreateParams.builder()
                 .setPaymentIntent(paymentIntentId);
         if (amountMinor != null) {
@@ -115,7 +115,10 @@ public class StripeService {
                 // Stripe's reason enum is narrow — fall back to no reason on unknown values.
             }
         }
-        return Refund.create(builder.build());
+        RequestOptions options = idempotencyKey != null && !idempotencyKey.isBlank()
+                ? RequestOptions.builder().setIdempotencyKey(idempotencyKey).build()
+                : RequestOptions.getDefault();
+        return Refund.create(builder.build(), options);
     }
 
     /**
