@@ -3,6 +3,8 @@ package com.atlassync.session.payment;
 import com.atlassync.session.exception.IllegalStateTransitionException;
 import com.atlassync.session.service.SessionService;
 import com.stripe.exception.SignatureVerificationException;
+import com.stripe.model.Charge;
+import com.stripe.model.Dispute;
 import com.stripe.model.Event;
 import com.stripe.model.EventDataObjectDeserializer;
 import com.stripe.model.PaymentIntent;
@@ -29,9 +31,9 @@ import java.util.UUID;
  * {@code whsec_...} secret into the env var. In production this is a real
  * webhook endpoint configured on the Stripe dashboard.
  *
- * <p>We only act on {@code payment_intent.succeeded}. Other events
- * (created, processing, canceled, etc.) get logged and acknowledged but
- * don't drive state — we don't need them yet.
+ * <p>Handled events: {@code payment_intent.succeeded}, {@code charge.refunded},
+ * {@code charge.dispute.created}, {@code charge.dispute.closed}. Other events
+ * get logged and acknowledged (200) but don't drive state.
  */
 @RestController
 @RequestMapping("/api/sessions/webhooks")
@@ -61,48 +63,134 @@ public class StripeWebhookController {
 
         log.info("[stripe-webhook] received type={} id={}", event.getType(), event.getId());
 
-        if ("payment_intent.succeeded".equals(event.getType())) {
-            EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
-            StripeObject obj = deserializer.getObject().orElse(null);
-            if (!(obj instanceof PaymentIntent intent)) {
-                log.warn("[stripe-webhook] payment_intent.succeeded with no intent payload");
-                return ResponseEntity.ok("ignored");
-            }
-            String sessionIdStr = intent.getMetadata() != null
-                    ? intent.getMetadata().get("session_id")
-                    : null;
-            if (sessionIdStr == null || sessionIdStr.isBlank()) {
-                log.warn("[stripe-webhook] paymentIntent={} missing session_id metadata",
-                        intent.getId());
-                return ResponseEntity.ok("missing metadata");
-            }
-            UUID sessionId;
-            try {
-                sessionId = UUID.fromString(sessionIdStr);
-            } catch (IllegalArgumentException e) {
-                log.warn("[stripe-webhook] paymentIntent={} malformed session_id={}",
-                        intent.getId(), sessionIdStr);
-                return ResponseEntity.ok("bad_metadata");
-            }
+        switch (event.getType()) {
+            case "payment_intent.succeeded":
+                return handlePaymentIntentSucceeded(event);
+            case "charge.refunded":
+                return handleChargeRefunded(event);
+            case "charge.dispute.created":
+                return handleDisputeCreated(event);
+            case "charge.dispute.closed":
+                return handleDisputeClosed(event);
+            default:
+                // Unknown event type — ack so Stripe stops retrying.
+                return ResponseEntity.ok("ok");
+        }
+    }
 
-            try {
-                sessionService.markPaidFromWebhook(sessionId);
-            } catch (IllegalStateTransitionException e) {
-                // The session is in an unexpected state (e.g. CANCELLED). Retrying
-                // won't help — ack to stop Stripe's retry storm. Investigate via the
-                // warn log instead.
-                log.error("[stripe-webhook] session={} state conflict, acking to stop retries: {}",
-                        sessionId, e.getMessage());
-                return ResponseEntity.ok("state_conflict");
-            } catch (Exception e) {
-                log.error("[stripe-webhook] failed to complete session={}", sessionId, e);
-                // Return 500 so Stripe retries — webhook re-delivery is fine,
-                // markPaidFromWebhook is idempotent.
-                return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                        .body("retry");
-            }
+    private ResponseEntity<String> handlePaymentIntentSucceeded(Event event) {
+        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        StripeObject obj = deserializer.getObject().orElse(null);
+        if (!(obj instanceof PaymentIntent intent)) {
+            log.warn("[stripe-webhook] payment_intent.succeeded with no intent payload");
+            return ResponseEntity.ok("ignored");
+        }
+        String sessionIdStr = intent.getMetadata() != null
+                ? intent.getMetadata().get("session_id")
+                : null;
+        if (sessionIdStr == null || sessionIdStr.isBlank()) {
+            log.warn("[stripe-webhook] paymentIntent={} missing session_id metadata",
+                    intent.getId());
+            return ResponseEntity.ok("missing metadata");
+        }
+        UUID sessionId;
+        try {
+            sessionId = UUID.fromString(sessionIdStr);
+        } catch (IllegalArgumentException e) {
+            log.warn("[stripe-webhook] paymentIntent={} malformed session_id={}",
+                    intent.getId(), sessionIdStr);
+            return ResponseEntity.ok("bad_metadata");
         }
 
+        try {
+            sessionService.markPaidFromWebhook(sessionId);
+        } catch (IllegalStateTransitionException e) {
+            // The session is in an unexpected state (e.g. CANCELLED). Retrying
+            // won't help — ack to stop Stripe's retry storm. Investigate via the
+            // warn log instead.
+            log.error("[stripe-webhook] session={} state conflict, acking to stop retries: {}",
+                    sessionId, e.getMessage());
+            return ResponseEntity.ok("state_conflict");
+        } catch (Exception e) {
+            log.error("[stripe-webhook] failed to complete session={}", sessionId, e);
+            // Return 500 so Stripe retries — webhook re-delivery is fine,
+            // markPaidFromWebhook is idempotent.
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body("retry");
+        }
         return ResponseEntity.ok("ok");
+    }
+
+    private ResponseEntity<String> handleChargeRefunded(Event event) {
+        Charge charge = unwrap(event, Charge.class);
+        if (charge == null) {
+            log.warn("[stripe-webhook] charge.refunded with no charge payload");
+            return ResponseEntity.ok("ignored");
+        }
+        try {
+            sessionService.markRefundedFromWebhook(
+                    charge.getPaymentIntent(),
+                    charge.getAmountRefunded(),
+                    charge.getAmount());
+        } catch (IllegalStateException e) {
+            log.warn("[stripe-webhook] refund could not be applied: {}", e.getMessage());
+            return ResponseEntity.ok("not_applicable");
+        } catch (IllegalStateTransitionException e) {
+            log.error("[stripe-webhook] session state conflict on refund, acking: {}", e.getMessage());
+            return ResponseEntity.ok("state_conflict");
+        } catch (Exception e) {
+            log.error("[stripe-webhook] failed to apply refund", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("retry");
+        }
+        return ResponseEntity.ok("ok");
+    }
+
+    private ResponseEntity<String> handleDisputeCreated(Event event) {
+        Dispute dispute = unwrap(event, Dispute.class);
+        if (dispute == null) {
+            log.warn("[stripe-webhook] charge.dispute.created with no dispute payload");
+            return ResponseEntity.ok("ignored");
+        }
+        try {
+            sessionService.markDisputedFromWebhook(dispute.getPaymentIntent());
+        } catch (IllegalStateException e) {
+            log.warn("[stripe-webhook] dispute could not be applied: {}", e.getMessage());
+            return ResponseEntity.ok("not_applicable");
+        } catch (IllegalStateTransitionException e) {
+            log.error("[stripe-webhook] session state conflict on dispute, acking: {}", e.getMessage());
+            return ResponseEntity.ok("state_conflict");
+        } catch (Exception e) {
+            log.error("[stripe-webhook] failed to apply dispute", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("retry");
+        }
+        return ResponseEntity.ok("ok");
+    }
+
+    private ResponseEntity<String> handleDisputeClosed(Event event) {
+        Dispute dispute = unwrap(event, Dispute.class);
+        if (dispute == null) {
+            log.warn("[stripe-webhook] charge.dispute.closed with no dispute payload");
+            return ResponseEntity.ok("ignored");
+        }
+        boolean won = "won".equals(dispute.getStatus());
+        try {
+            sessionService.resolveDisputeFromWebhook(dispute.getPaymentIntent(), won);
+        } catch (IllegalStateException e) {
+            log.warn("[stripe-webhook] dispute resolution could not be applied: {}", e.getMessage());
+            return ResponseEntity.ok("not_applicable");
+        } catch (IllegalStateTransitionException e) {
+            log.error("[stripe-webhook] session state conflict on dispute close, acking: {}", e.getMessage());
+            return ResponseEntity.ok("state_conflict");
+        } catch (Exception e) {
+            log.error("[stripe-webhook] failed to resolve dispute", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("retry");
+        }
+        return ResponseEntity.ok("ok");
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T extends StripeObject> T unwrap(Event event, Class<T> type) {
+        StripeObject obj = event.getDataObjectDeserializer().getObject().orElse(null);
+        return type.isInstance(obj) ? (T) obj : null;
     }
 }

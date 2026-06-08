@@ -27,6 +27,7 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -298,6 +299,67 @@ public class SessionService {
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void selfHealMarkPaid(UUID sessionId) {
         markPaidFromWebhook(sessionId);
+    }
+
+    @Transactional
+    public void markRefundedFromWebhook(String paymentIntentId, long refundedAmountMinor, long originalAmountMinor) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+
+        SessionStatus targetState = refundedAmountMinor >= originalAmountMinor
+                ? SessionStatus.REFUNDED
+                : SessionStatus.PARTIAL_REFUND;
+
+        if (session.getStatus() == targetState) {
+            log.info("[stripe-webhook] session={} already {}, skipping",
+                    session.getId(), targetState);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(targetState);
+        recordTransition(session, fromState, targetState, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.info("[stripe-webhook] session={} marked {} (refunded {}/{} minor units)",
+                session.getId(), targetState, refundedAmountMinor, originalAmountMinor);
+    }
+
+    @Transactional
+    public void markDisputedFromWebhook(String paymentIntentId) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+        if (session.getStatus() == SessionStatus.DISPUTED) {
+            log.info("[stripe-webhook] session={} already DISPUTED, skipping", session.getId());
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(SessionStatus.DISPUTED);
+        recordTransition(session, fromState, SessionStatus.DISPUTED, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.warn("[stripe-webhook] session={} entered DISPUTED state", session.getId());
+    }
+
+    @Transactional
+    public void resolveDisputeFromWebhook(String paymentIntentId, boolean won) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+        SessionStatus targetState = won ? SessionStatus.COMPLETED : SessionStatus.CHARGEBACK_LOST;
+        if (session.getStatus() == targetState) {
+            log.info("[stripe-webhook] session={} already {}, skipping",
+                    session.getId(), targetState);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(targetState);
+        recordTransition(session, fromState, targetState, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.warn("[stripe-webhook] session={} dispute resolved → {}",
+                session.getId(), targetState);
+    }
+
+    private ShoppingSession findSessionByPaymentIntentOrThrow(String paymentIntentId) {
+        return sessionRepository.findByStripePaymentIntentId(paymentIntentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "No session has paymentIntent " + paymentIntentId));
     }
 
     /**
