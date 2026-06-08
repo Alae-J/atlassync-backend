@@ -5,9 +5,11 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
 import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
+import com.stripe.param.RefundCreateParams;
 import jakarta.annotation.PostConstruct;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -98,6 +100,22 @@ public class StripeService {
 
     public PaymentIntent retrievePaymentIntent(String paymentIntentId) throws StripeException {
         return PaymentIntent.retrieve(paymentIntentId);
+    }
+
+    public Refund refund(String paymentIntentId, Long amountMinor, String reason) throws StripeException {
+        RefundCreateParams.Builder builder = RefundCreateParams.builder()
+                .setPaymentIntent(paymentIntentId);
+        if (amountMinor != null) {
+            builder.setAmount(amountMinor);
+        }
+        if (reason != null && !reason.isBlank()) {
+            try {
+                builder.setReason(RefundCreateParams.Reason.valueOf(reason.toUpperCase()));
+            } catch (IllegalArgumentException ignored) {
+                // Stripe's reason enum is narrow — fall back to no reason on unknown values.
+            }
+        }
+        return Refund.create(builder.build());
     }
 
     /**

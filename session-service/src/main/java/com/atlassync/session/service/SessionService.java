@@ -14,6 +14,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.stripe.exception.StripeException;
 import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,6 +24,7 @@ import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
@@ -354,6 +356,33 @@ public class SessionService {
         sessionRepository.save(session);
         log.warn("[stripe-webhook] session={} dispute resolved → {}",
                 session.getId(), targetState);
+    }
+
+    @Transactional
+    public RefundResponse issueRefund(UUID sessionId, Double amount, String reason) {
+        ShoppingSession session = findSessionOrThrow(sessionId);
+        if (session.getStripePaymentIntentId() == null) {
+            throw new IllegalStateException("Session has no paid PaymentIntent");
+        }
+
+        Long amountMinor = amount != null
+                ? BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_UP)
+                        .movePointRight(2).longValueExact()
+                : null;
+
+        try {
+            Refund refund = stripeService.refund(
+                    session.getStripePaymentIntentId(), amountMinor, reason);
+            return new RefundResponse(
+                    sessionId,
+                    refund.getId(),
+                    BigDecimal.valueOf(refund.getAmount()).movePointLeft(2),
+                    refund.getCurrency().toUpperCase(),
+                    refund.getStatus());
+        } catch (StripeException e) {
+            log.error("[stripe] refund failed for session={}", sessionId, e);
+            throw new RuntimeException("Refund failed: " + e.getMessage(), e);
+        }
     }
 
     private ShoppingSession findSessionByPaymentIntentOrThrow(String paymentIntentId) {
