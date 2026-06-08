@@ -115,7 +115,7 @@ public class SessionService {
         }
 
         try {
-            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount, customerId);
+            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount, customerId, null);
             return new PaymentIntentResponse(
                     sessionId,
                     intent.getId(),

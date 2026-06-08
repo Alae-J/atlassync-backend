@@ -5,6 +5,7 @@ import com.stripe.exception.SignatureVerificationException;
 import com.stripe.exception.StripeException;
 import com.stripe.model.Event;
 import com.stripe.model.PaymentIntent;
+import com.stripe.net.RequestOptions;
 import com.stripe.net.Webhook;
 import com.stripe.param.PaymentIntentCreateParams;
 import jakarta.annotation.PostConstruct;
@@ -61,7 +62,12 @@ public class StripeService {
      * for users without a customer record yet; the intent will still be created
      * but won't be attached to a Stripe Customer.
      */
-    public PaymentIntent createPaymentIntent(UUID sessionId, BigDecimal amount, String customerId) throws StripeException {
+    public PaymentIntent createPaymentIntent(
+            UUID sessionId,
+            BigDecimal amount,
+            String customerId,
+            String idempotencyKey) throws StripeException {
+
         long amountMinor = amount.setScale(2, RoundingMode.HALF_UP)
                 .movePointRight(2)
                 .longValueExact();
@@ -80,10 +86,18 @@ public class StripeService {
             builder.setCustomer(customerId);
         }
 
-        PaymentIntent intent = PaymentIntent.create(builder.build());
-        log.info("[stripe] paymentIntent created session={} customer={} amount={} {} id={}",
-                sessionId, customerId, amountMinor, properties.currency(), intent.getId());
+        RequestOptions options = idempotencyKey != null && !idempotencyKey.isBlank()
+                ? RequestOptions.builder().setIdempotencyKey(idempotencyKey).build()
+                : RequestOptions.getDefault();
+
+        PaymentIntent intent = PaymentIntent.create(builder.build(), options);
+        log.info("[stripe] paymentIntent created session={} customer={} idempotency={} amount={} {} id={}",
+                sessionId, customerId, idempotencyKey, amountMinor, properties.currency(), intent.getId());
         return intent;
+    }
+
+    public PaymentIntent retrievePaymentIntent(String paymentIntentId) throws StripeException {
+        return PaymentIntent.retrieve(paymentIntentId);
     }
 
     /**
