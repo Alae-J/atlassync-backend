@@ -325,11 +325,23 @@ public class SessionService {
     }
 
     private SessionResponse toSessionResponse(ShoppingSession session) {
+        QrData exitQr = null;
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            exitQr = qrTokenRepository
+                    .findFirstBySessionIdAndTokenTypeOrderByCreatedAtDesc(
+                            session.getId(), QrTokenType.EXIT)
+                    .map(token -> new QrData(
+                            token.getCorrelationId(),
+                            token.getPayload(),
+                            token.getVaultSignature(),
+                            token.getExpiresAt()))
+                    .orElse(null);
+        }
         return new SessionResponse(
                 session.getId(),
                 session.getUserId(),
                 session.getStatus().name(),
-                session.getCreatedAt()
-        );
+                session.getCreatedAt(),
+                exitQr);
     }
 }
