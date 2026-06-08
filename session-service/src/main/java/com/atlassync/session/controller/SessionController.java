@@ -73,6 +73,20 @@ public class SessionController {
         return ResponseEntity.ok(sessionService.getHistory(userId, limit));
     }
 
+    @PostMapping("/{id}/pay/intent")
+    public ResponseEntity<PaymentIntentResponse> createPaymentIntent(
+            @PathVariable UUID id,
+            @RequestHeader(value = "X-User-Id", required = false) Long headerUserId,
+            @RequestParam(value = "userId", required = false) Long paramUserId) {
+
+        Long userId = headerUserId != null ? headerUserId : paramUserId;
+        if (userId == null) {
+            throw new IllegalArgumentException("userId is required via X-User-Id header or userId param");
+        }
+        PaymentIntentResponse response = sessionService.createPaymentIntent(id, userId);
+        return ResponseEntity.ok(response);
+    }
+
     @PostMapping("/{id}/pay")
     public ResponseEntity<PaymentResponse> completePayment(
             @PathVariable UUID id,
