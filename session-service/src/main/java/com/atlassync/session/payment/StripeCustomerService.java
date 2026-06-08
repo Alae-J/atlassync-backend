@@ -55,10 +55,6 @@ public class StripeCustomerService {
 
     private String createAndPersist(Long userId, String email) throws StripeException {
         CustomerCreateParams.Builder paramsBuilder = CustomerCreateParams.builder()
-                .setAddress(CustomerCreateParams.Address.builder()
-                        .setCountry("MA")
-                        .setCity("Casablanca")
-                        .build())
                 .putMetadata("atlassync_user_id", userId.toString());
         if (email != null && !email.isBlank()) {
             paramsBuilder.setEmail(email);
