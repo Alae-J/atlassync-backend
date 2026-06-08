@@ -166,7 +166,7 @@ public class SessionService {
                         log.warn("[stripe] paymentIntent {} already succeeded for session={}, self-healing",
                                 existing.getId(), sessionId);
                         self.selfHealMarkPaid(sessionId);
-                        throw new IllegalStateException("Session already paid");
+                        throw new SessionAlreadyPaidException("Session already paid");
 
                     case "canceled":
                     default:
