@@ -4,12 +4,15 @@ import com.atlassync.session.dto.*;
 import com.atlassync.session.entity.*;
 import com.atlassync.session.exception.*;
 import com.atlassync.session.integration.CartSnapshotClient;
+import com.atlassync.session.payment.StripeService;
 import com.atlassync.session.repository.QrTokenRepository;
 import com.atlassync.session.repository.SessionLineItemRepository;
 import com.atlassync.session.repository.SessionRepository;
 import com.atlassync.session.repository.SessionStateTransitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -35,6 +38,7 @@ public class SessionService {
     private final SessionEventProducer eventProducer;
     private final CartSnapshotClient cartSnapshotClient;
     private final ObjectMapper objectMapper;
+    private final StripeService stripeService;
 
     @Transactional
     public StartSessionResponse startSession(Long userId, Long storeId) {
@@ -68,6 +72,50 @@ public class SessionService {
 
         log.info("Activated session={}", session.getId());
         return toSessionResponse(session);
+    }
+
+    /**
+     * Creates a Stripe PaymentIntent for the session's current cart total.
+     * Transitions the session into PAYING. The mobile confirms the intent
+     * directly against Stripe; we wait for the webhook to mark the session
+     * COMPLETED.
+     *
+     * <p>Amount is computed server-side from the live cart — never from the
+     * client — so a tampered client can't pay 1 MAD for 200 MAD of stuff.
+     */
+    @Transactional
+    public PaymentIntentResponse createPaymentIntent(UUID sessionId, Long userId) {
+        ShoppingSession session = findSessionOrThrow(sessionId);
+        verifyOwnership(session, userId);
+
+        // CartSnapshotClient.fetch returns a CartSnapshot record with a
+        // `total` (BigDecimal) field — use that directly.
+        BigDecimal amount = cartSnapshotClient.fetch(sessionId).total();
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalStateException(
+                    "Refusing to create payment intent for empty cart");
+        }
+
+        SessionStatus fromState = session.getStatus();
+        if (fromState != SessionStatus.PAYING) {
+            session.transitionTo(SessionStatus.PAYING);
+            sessionRepository.save(session);
+            recordTransition(session, fromState, SessionStatus.PAYING,
+                    "user:" + userId, null);
+        }
+
+        try {
+            PaymentIntent intent = stripeService.createPaymentIntent(sessionId, amount);
+            return new PaymentIntentResponse(
+                    sessionId,
+                    intent.getId(),
+                    intent.getClientSecret(),
+                    amount,
+                    intent.getCurrency().toUpperCase());
+        } catch (StripeException e) {
+            log.error("[stripe] failed to create paymentIntent session={}", sessionId, e);
+            throw new RuntimeException("Could not create payment intent: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -105,6 +153,45 @@ public class SessionService {
 
         log.info("Payment completed for session={}, exit QR generated", sessionId);
         return new PaymentResponse(session.getId(), session.getStatus().name(), exitQr);
+    }
+
+    /**
+     * Mark a session COMPLETED from the Stripe webhook. Idempotent — re-delivery
+     * is a noop. Snapshots the cart, generates the exit QR, publishes the
+     * session-paid / session-completed events.
+     *
+     * <p>This is the source of truth for "payment cleared". Do NOT trust the
+     * mobile to mark sessions paid — anyone can fake an HTTP call. The webhook
+     * is signature-verified by {@link StripeService#constructEvent}.
+     */
+    @Transactional
+    public void markPaidFromWebhook(UUID sessionId) {
+        ShoppingSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Session not found: " + sessionId));
+
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            log.info("[stripe-webhook] session={} already COMPLETED, skipping",
+                    sessionId);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(SessionStatus.COMPLETED);
+        session.setCompletedAt(Instant.now());
+        snapshotCartIntoSession(session);
+        sessionRepository.save(session);
+
+        recordTransition(session, fromState, SessionStatus.COMPLETED,
+                "stripe-webhook", null);
+
+        generateQr(session, QrTokenType.EXIT);
+
+        eventProducer.publishSessionPaid(session.getId(), session.getUserId());
+        eventProducer.publishSessionCompleted(session.getId());
+
+        log.info("[stripe-webhook] session={} marked COMPLETED, exit QR generated",
+                sessionId);
     }
 
     /**
