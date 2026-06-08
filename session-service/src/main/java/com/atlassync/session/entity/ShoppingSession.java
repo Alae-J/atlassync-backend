@@ -78,7 +78,12 @@ public class ShoppingSession {
             case CREATED -> Set.of(SessionStatus.ACTIVE, SessionStatus.CANCELLED);
             case ACTIVE -> Set.of(SessionStatus.PAYING, SessionStatus.CANCELLED);
             case PAYING -> Set.of(SessionStatus.COMPLETED, SessionStatus.CANCELLED);
-            case COMPLETED, CANCELLED -> Set.of();
+            case COMPLETED -> Set.of(SessionStatus.REFUNDED, SessionStatus.PARTIAL_REFUND,
+                    SessionStatus.DISPUTED, SessionStatus.CHARGEBACK_LOST);
+            case PARTIAL_REFUND -> Set.of(SessionStatus.REFUNDED, SessionStatus.DISPUTED,
+                    SessionStatus.CHARGEBACK_LOST);
+            case DISPUTED -> Set.of(SessionStatus.COMPLETED, SessionStatus.CHARGEBACK_LOST);
+            case CANCELLED, REFUNDED, CHARGEBACK_LOST -> Set.of();
         };
 
         if (!allowed.contains(target)) {
