@@ -54,16 +54,17 @@ public class StripeCustomerService {
     }
 
     private String createAndPersist(Long userId, String email) throws StripeException {
-        CustomerCreateParams params = CustomerCreateParams.builder()
-                .setEmail(email)
-                .putMetadata("atlassync_user_id", userId.toString())
-                .build();
-        Customer customer = Customer.create(params);
+        CustomerCreateParams.Builder paramsBuilder = CustomerCreateParams.builder()
+                .putMetadata("atlassync_user_id", userId.toString());
+        if (email != null && !email.isBlank()) {
+            paramsBuilder.setEmail(email);
+        }
+        Customer customer = Customer.create(paramsBuilder.build());
         PaymentCustomer row = new PaymentCustomer(
                 userId, customer.getId(), email, Instant.now());
         repository.save(row);
-        log.info("[stripe-customer] created customer={} for user={}",
-                customer.getId(), userId);
+        log.info("[stripe-customer] created customer={} for user={} email={}",
+                customer.getId(), userId, email != null && !email.isBlank() ? "yes" : "none");
         return customer.getId();
     }
 

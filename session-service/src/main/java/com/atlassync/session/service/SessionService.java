@@ -98,20 +98,20 @@ public class SessionService {
                     "Refusing to create payment intent for empty cart");
         }
 
-        SessionStatus fromState = session.getStatus();
-        if (fromState != SessionStatus.PAYING) {
-            session.transitionTo(SessionStatus.PAYING);
-            sessionRepository.save(session);
-            recordTransition(session, fromState, SessionStatus.PAYING,
-                    "user:" + userId, null);
-        }
-
         String customerId;
         try {
             customerId = stripeCustomerService.getOrCreate(userId, email);
         } catch (StripeException e) {
             log.error("[stripe] failed to get/create customer for user={}", userId, e);
             throw new RuntimeException("Could not get Stripe customer: " + e.getMessage(), e);
+        }
+
+        SessionStatus fromState = session.getStatus();
+        if (fromState != SessionStatus.PAYING) {
+            session.transitionTo(SessionStatus.PAYING);
+            sessionRepository.save(session);
+            recordTransition(session, fromState, SessionStatus.PAYING,
+                    "user:" + userId, null);
         }
 
         try {
