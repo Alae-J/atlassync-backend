@@ -84,6 +84,8 @@ services:
     environment:
       VAULT_ADDR: http://vault:8200
       VAULT_TOKEN: root
+      STRIPE_SECRET_KEY: ${STRIPE_SECRET_KEY:-}
+      STRIPE_WEBHOOK_SECRET: ${STRIPE_WEBHOOK_SECRET:-}
     volumes:
       - ./infrastructure/vault/init-vault.sh:/init-vault.sh
     entrypoint: ["/bin/sh", "/init-vault.sh"]

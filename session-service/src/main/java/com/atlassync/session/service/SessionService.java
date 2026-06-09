@@ -4,22 +4,32 @@ import com.atlassync.session.dto.*;
 import com.atlassync.session.entity.*;
 import com.atlassync.session.exception.*;
 import com.atlassync.session.integration.CartSnapshotClient;
+import com.atlassync.session.payment.StripeCustomerService;
+import com.atlassync.session.payment.StripeService;
 import com.atlassync.session.repository.QrTokenRepository;
 import com.atlassync.session.repository.SessionLineItemRepository;
 import com.atlassync.session.repository.SessionRepository;
 import com.atlassync.session.repository.SessionStateTransitionRepository;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.stripe.exception.StripeException;
+import com.stripe.model.PaymentIntent;
+import com.stripe.model.Refund;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.UUID;
 
 @Service
@@ -35,6 +45,23 @@ public class SessionService {
     private final SessionEventProducer eventProducer;
     private final CartSnapshotClient cartSnapshotClient;
     private final ObjectMapper objectMapper;
+    private final StripeService stripeService;
+    private final StripeCustomerService stripeCustomerService;
+
+    /**
+     * Self-injected reference for invoking @Transactional methods through the
+     * Spring proxy (avoids the proxy-bypass that direct {@code this.method()}
+     * calls suffer from). Used for the self-heal path that needs to commit
+     * markPaidFromWebhook's writes BEFORE we throw the IllegalStateException
+     * back to the caller — without the proxy, the writes would join the
+     * outer transaction and roll back.
+     */
+    private SessionService self;
+
+    @Autowired
+    public void setSelf(@Lazy SessionService self) {
+        this.self = self;
+    }
 
     @Transactional
     public StartSessionResponse startSession(Long userId, Long storeId) {
@@ -68,6 +95,121 @@ public class SessionService {
 
         log.info("Activated session={}", session.getId());
         return toSessionResponse(session);
+    }
+
+    /**
+     * Creates a Stripe PaymentIntent for the session's current cart total.
+     * Transitions the session into PAYING. The mobile confirms the intent
+     * directly against Stripe; we wait for the webhook to mark the session
+     * COMPLETED.
+     *
+     * <p>Amount is computed server-side from the live cart — never from the
+     * client — so a tampered client can't pay 1 MAD for 200 MAD of stuff.
+     */
+    @Transactional
+    public PaymentIntentResponse createPaymentIntent(UUID sessionId, Long userId, String email) {
+        ShoppingSession session = findSessionOrThrow(sessionId);
+        verifyOwnership(session, userId);
+
+        // Refuse new intents once the session has reached a terminal state.
+        // Phase C will add REFUNDED / PARTIAL_REFUND / DISPUTED / CHARGEBACK_LOST
+        // to this guard — for now COMPLETED is the only one that exists.
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            throw new IllegalStateException(
+                    "Session " + sessionId + " has reached terminal status COMPLETED "
+                            + "— no more payment intents.");
+        }
+
+        BigDecimal amount = cartSnapshotClient.fetch(sessionId).total();
+        if (amount == null || amount.signum() <= 0) {
+            throw new IllegalStateException(
+                    "Refusing to create payment intent for empty cart");
+        }
+
+        // Resolve the Stripe customer BEFORE state transitions or intent creation
+        // — failure here shouldn't strand the session in PAYING.
+        String customerId;
+        try {
+            customerId = stripeCustomerService.getOrCreate(userId, email);
+        } catch (StripeException e) {
+            log.error("[stripe] failed to get/create customer for user={}", userId, e);
+            throw new RuntimeException("Could not get Stripe customer: " + e.getMessage(), e);
+        }
+
+        // Try to reuse an existing intent first.
+        if (session.getStripePaymentIntentId() != null) {
+            try {
+                PaymentIntent existing = stripeService.retrievePaymentIntent(
+                        session.getStripePaymentIntentId());
+                String existingStatus = existing.getStatus();
+                session.setStripeIntentStatus(existingStatus);
+
+                switch (existingStatus) {
+                    case "requires_payment_method":
+                    case "requires_confirmation":
+                    case "requires_action":
+                    case "processing":
+                        log.info("[stripe] reusing existing paymentIntent {} for session={} (status={})",
+                                existing.getId(), sessionId, existingStatus);
+                        sessionRepository.save(session);
+                        return new PaymentIntentResponse(
+                                sessionId,
+                                existing.getId(),
+                                existing.getClientSecret(),
+                                amount,
+                                existing.getCurrency().toUpperCase());
+
+                    case "succeeded":
+                        // Self-heal: charge cleared but webhook is late. Commit the
+                        // markPaid writes in a separate transaction so the surrounding
+                        // IllegalStateException rollback doesn't undo them.
+                        log.warn("[stripe] paymentIntent {} already succeeded for session={}, self-healing",
+                                existing.getId(), sessionId);
+                        self.selfHealMarkPaid(sessionId);
+                        throw new SessionAlreadyPaidException("Session already paid");
+
+                    case "canceled":
+                    default:
+                        // Stale or canceled — fall through to mint a new one.
+                        session.setStripePaymentIntentId(null);
+                        session.setStripeIntentStatus(null);
+                        break;
+                }
+            } catch (StripeException e) {
+                // Couldn't reach Stripe; treat as transient and rethrow.
+                throw new RuntimeException(
+                        "Could not retrieve existing paymentIntent: " + e.getMessage(), e);
+            }
+        }
+
+        // Transition into PAYING (idempotent on PAYING).
+        SessionStatus fromState = session.getStatus();
+        if (fromState != SessionStatus.PAYING) {
+            session.transitionTo(SessionStatus.PAYING);
+            recordTransition(session, fromState, SessionStatus.PAYING,
+                    "user:" + userId, null);
+        }
+
+        // Build deterministic idempotency key — bumps when @Version bumps.
+        String idempotencyKey = "session-" + sessionId + "-v" + session.getVersion();
+
+        try {
+            PaymentIntent intent = stripeService.createPaymentIntent(
+                    sessionId, amount, customerId, idempotencyKey);
+            session.setStripePaymentIntentId(intent.getId());
+            session.setStripeIntentStatus(intent.getStatus());
+            sessionRepository.save(session);
+
+            return new PaymentIntentResponse(
+                    sessionId,
+                    intent.getId(),
+                    intent.getClientSecret(),
+                    amount,
+                    intent.getCurrency().toUpperCase());
+        } catch (StripeException e) {
+            log.error("[stripe] failed to create paymentIntent session={}", sessionId, e);
+            throw new RuntimeException("Could not create payment intent: " + e.getMessage(), e);
+        }
     }
 
     @Transactional
@@ -105,6 +247,152 @@ public class SessionService {
 
         log.info("Payment completed for session={}, exit QR generated", sessionId);
         return new PaymentResponse(session.getId(), session.getStatus().name(), exitQr);
+    }
+
+    /**
+     * Mark a session COMPLETED from the Stripe webhook. Idempotent — re-delivery
+     * is a noop. Snapshots the cart, generates the exit QR, publishes the
+     * session-paid / session-completed events.
+     *
+     * <p>This is the source of truth for "payment cleared". Do NOT trust the
+     * mobile to mark sessions paid — anyone can fake an HTTP call. The webhook
+     * is signature-verified by {@link StripeService#constructEvent}.
+     */
+    @Transactional
+    public void markPaidFromWebhook(UUID sessionId) {
+        ShoppingSession session = sessionRepository.findById(sessionId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "Session not found: " + sessionId));
+
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            log.info("[stripe-webhook] session={} already COMPLETED, skipping",
+                    sessionId);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(SessionStatus.COMPLETED);
+        session.setCompletedAt(Instant.now());
+        snapshotCartIntoSession(session);
+        sessionRepository.save(session);
+
+        recordTransition(session, fromState, SessionStatus.COMPLETED,
+                "stripe-webhook", null);
+
+        generateQr(session, QrTokenType.EXIT);
+
+        eventProducer.publishSessionPaid(session.getId(), session.getUserId());
+        eventProducer.publishSessionCompleted(session.getId());
+
+        log.info("[stripe-webhook] session={} marked COMPLETED, exit QR generated",
+                sessionId);
+    }
+
+    /**
+     * Self-heal entry point — runs {@link #markPaidFromWebhook} in a brand-new
+     * transaction so the writes survive even if the caller's transaction is
+     * about to be rolled back (the {@code createPaymentIntent} succeeded-intent
+     * path throws after calling us).
+     *
+     * <p>Must be called via {@code self.selfHealMarkPaid(...)} not
+     * {@code this.selfHealMarkPaid(...)} — the latter bypasses the proxy and
+     * the {@code REQUIRES_NEW} propagation has no effect.
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void selfHealMarkPaid(UUID sessionId) {
+        markPaidFromWebhook(sessionId);
+    }
+
+    @Transactional
+    public void markRefundedFromWebhook(String paymentIntentId, long refundedAmountMinor, long originalAmountMinor) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+
+        SessionStatus targetState = refundedAmountMinor >= originalAmountMinor
+                ? SessionStatus.REFUNDED
+                : SessionStatus.PARTIAL_REFUND;
+
+        if (session.getStatus() == targetState) {
+            log.info("[stripe-webhook] session={} already {}, skipping",
+                    session.getId(), targetState);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(targetState);
+        recordTransition(session, fromState, targetState, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.info("[stripe-webhook] session={} marked {} (refunded {}/{} minor units)",
+                session.getId(), targetState, refundedAmountMinor, originalAmountMinor);
+    }
+
+    @Transactional
+    public void markDisputedFromWebhook(String paymentIntentId) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+        if (session.getStatus() == SessionStatus.DISPUTED) {
+            log.info("[stripe-webhook] session={} already DISPUTED, skipping", session.getId());
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(SessionStatus.DISPUTED);
+        recordTransition(session, fromState, SessionStatus.DISPUTED, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.warn("[stripe-webhook] session={} entered DISPUTED state", session.getId());
+    }
+
+    @Transactional
+    public void resolveDisputeFromWebhook(String paymentIntentId, boolean won) {
+        ShoppingSession session = findSessionByPaymentIntentOrThrow(paymentIntentId);
+        SessionStatus targetState = won ? SessionStatus.COMPLETED : SessionStatus.CHARGEBACK_LOST;
+        if (session.getStatus() == targetState) {
+            log.info("[stripe-webhook] session={} already {}, skipping",
+                    session.getId(), targetState);
+            return;
+        }
+
+        SessionStatus fromState = session.getStatus();
+        session.transitionTo(targetState);
+        recordTransition(session, fromState, targetState, "stripe-webhook", null);
+        sessionRepository.save(session);
+        log.warn("[stripe-webhook] session={} dispute resolved → {}",
+                session.getId(), targetState);
+    }
+
+    @Transactional
+    public RefundResponse issueRefund(UUID sessionId, Double amount, String reason) {
+        ShoppingSession session = findSessionOrThrow(sessionId);
+        if (session.getStripePaymentIntentId() == null) {
+            throw new IllegalStateException("Session has no paid PaymentIntent");
+        }
+
+        Long amountMinor = amount != null
+                ? BigDecimal.valueOf(amount).setScale(2, RoundingMode.HALF_UP)
+                        .movePointRight(2).longValueExact()
+                : null;
+
+        try {
+            String idempotencyKey = String.format("refund-%s-%s-%s",
+                    sessionId,
+                    amountMinor != null ? amountMinor.toString() : "full",
+                    reason != null ? reason : "");
+            Refund refund = stripeService.refund(
+                    session.getStripePaymentIntentId(), amountMinor, reason, idempotencyKey);
+            return new RefundResponse(
+                    sessionId,
+                    refund.getId(),
+                    BigDecimal.valueOf(refund.getAmount()).movePointLeft(2),
+                    refund.getCurrency().toUpperCase(),
+                    refund.getStatus());
+        } catch (StripeException e) {
+            log.error("[stripe] refund failed for session={}", sessionId, e);
+            throw new RuntimeException("Refund failed: " + e.getMessage(), e);
+        }
+    }
+
+    private ShoppingSession findSessionByPaymentIntentOrThrow(String paymentIntentId) {
+        return sessionRepository.findByStripePaymentIntentId(paymentIntentId)
+                .orElseThrow(() -> new IllegalStateException(
+                        "No session has paymentIntent " + paymentIntentId));
     }
 
     /**
@@ -325,11 +613,23 @@ public class SessionService {
     }
 
     private SessionResponse toSessionResponse(ShoppingSession session) {
+        QrData exitQr = null;
+        if (session.getStatus() == SessionStatus.COMPLETED) {
+            exitQr = qrTokenRepository
+                    .findFirstBySessionIdAndTokenTypeOrderByCreatedAtDesc(
+                            session.getId(), QrTokenType.EXIT)
+                    .map(token -> new QrData(
+                            token.getCorrelationId(),
+                            token.getPayload(),
+                            token.getVaultSignature(),
+                            token.getExpiresAt()))
+                    .orElse(null);
+        }
         return new SessionResponse(
                 session.getId(),
                 session.getUserId(),
                 session.getStatus().name(),
-                session.getCreatedAt()
-        );
+                session.getCreatedAt(),
+                exitQr);
     }
 }

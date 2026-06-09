@@ -73,8 +73,14 @@ class OtpServiceTest {
         when(authService.issueTokensFor(any(User.class)))
                 .thenAnswer(inv -> {
                     User u = inv.getArgument(0);
+                    var prefs = new AuthResponse.UserPreferences(
+                            u.getDefaultStoreId(),
+                            u.getCurrencyCode(),
+                            u.getDietaryPrefs(),
+                            u.getAllergens(),
+                            u.getNotificationPrefs());
                     return new AuthResponse("a", "r", u.getId(), u.getEmail(), u.getUsername(),
-                            "ROLE_CUSTOMER", u.isEmailVerified());
+                            "ROLE_CUSTOMER", u.isEmailVerified(), u.getPhone(), prefs);
                 });
 
         service = new OtpService(

@@ -18,6 +18,15 @@ public class GlobalExceptionHandler {
         return problem;
     }
 
+    @ExceptionHandler(SessionAlreadyPaidException.class)
+    public ProblemDetail handleAlreadyPaid(SessionAlreadyPaidException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        problem.setTitle("Session Already Paid");
+        problem.setProperty("timestamp", Instant.now());
+        problem.setProperty("code", "session_already_paid");
+        return problem;
+    }
+
     @ExceptionHandler(SessionNotFoundException.class)
     public ProblemDetail handleSessionNotFound(SessionNotFoundException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());

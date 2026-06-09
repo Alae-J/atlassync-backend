@@ -4,6 +4,19 @@ server:
 spring:
   application:
     name: session-service
+  config:
+    import: optional:vault://
+  cloud:
+    vault:
+      uri: ${VAULT_ADDR:http://localhost:8200}
+      token: ${VAULT_TOKEN:root}
+      authentication: TOKEN
+      kv:
+        enabled: true
+        backend: secret
+        default-context: atlassync/stripe
+        application-name: ''
+      fail-fast: false
   datasource:
     url: jdbc:postgresql://localhost:5432/atlassync_session
     username: atlassync
@@ -20,10 +33,6 @@ spring:
       key-serializer: org.apache.kafka.common.serialization.StringSerializer
       value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
 
-vault:
-  uri: ${VAULT_ADDR:http://localhost:8200}
-  token: ${VAULT_TOKEN:root}
-
 jwt:
   secret: ${JWT_SECRET:atlassync-fallback-hmac-signing-key-for-dev}
 
@@ -36,3 +45,9 @@ management:
     web:
       exposure:
         include: health,prometheus
+
+atlassync:
+  stripe:
+    api-key: ${STRIPE_SECRET_KEY:}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:}
+    currency: ${STRIPE_CURRENCY:mad}

@@ -4,9 +4,15 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -41,6 +47,30 @@ public class User {
 
     @Column(name = "email_verified_at")
     private Instant emailVerifiedAt;
+
+    // ── Preferences (Account → Preferences tab) ─────────────────────────
+    // All nullable / default-empty so existing rows pre-V6 read as "no
+    // preference" with sensible mobile-side defaults (MAD, no flagged
+    // allergens, etc.). Language lives elsewhere — surfaced as "Coming
+    // soon" until the i18n setup lands.
+
+    @Column(name = "default_store_id")
+    private Long defaultStoreId;
+
+    @Column(name = "currency_code", nullable = false, length = 3)
+    private String currencyCode = "MAD";
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "dietary_prefs", columnDefinition = "text[]")
+    private List<String> dietaryPrefs = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "allergens", columnDefinition = "text[]")
+    private List<String> allergens = new ArrayList<>();
+
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "notification_prefs", columnDefinition = "jsonb")
+    private Map<String, Boolean> notificationPrefs = new HashMap<>();
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt = Instant.now();

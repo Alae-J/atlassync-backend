@@ -7,5 +7,7 @@ package com.atlassync.auth.entity;
  */
 public enum OtpPurpose {
     LOGIN,
-    EMAIL_VERIFICATION
+    EMAIL_VERIFICATION,
+    PHONE_VERIFICATION,
+    PASSWORD_RESET
 }

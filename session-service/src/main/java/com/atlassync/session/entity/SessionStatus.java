@@ -5,5 +5,9 @@ public enum SessionStatus {
     ACTIVE,
     PAYING,
     COMPLETED,
-    CANCELLED
+    CANCELLED,
+    REFUNDED,
+    PARTIAL_REFUND,
+    DISPUTED,
+    CHARGEBACK_LOST
 }

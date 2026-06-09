@@ -20,4 +20,11 @@ public interface EmailService {
      * different copy than the welcome email so users don't get the same message twice.
      */
     void sendVerificationCode(String to, String name, String verificationCode, Duration codeTtl);
+
+    /**
+     * Sends a one-time code for the forgot-password flow. The code is short-lived
+     * and single-use; the recipient pastes it into the reset screen along with a
+     * new password.
+     */
+    void sendPasswordResetCode(String to, String name, String resetCode, Duration codeTtl);
 }

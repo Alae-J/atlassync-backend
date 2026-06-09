@@ -51,6 +51,12 @@ public class ShoppingSession {
     @Column(name = "item_count")
     private Integer itemCount;
 
+    @Column(name = "stripe_payment_intent_id", length = 64)
+    private String stripePaymentIntentId;
+
+    @Column(name = "stripe_intent_status", length = 32)
+    private String stripeIntentStatus;
+
     @Version
     @Column(name = "version", nullable = false)
     private Long version;
@@ -72,7 +78,12 @@ public class ShoppingSession {
             case CREATED -> Set.of(SessionStatus.ACTIVE, SessionStatus.CANCELLED);
             case ACTIVE -> Set.of(SessionStatus.PAYING, SessionStatus.CANCELLED);
             case PAYING -> Set.of(SessionStatus.COMPLETED, SessionStatus.CANCELLED);
-            case COMPLETED, CANCELLED -> Set.of();
+            case COMPLETED -> Set.of(SessionStatus.REFUNDED, SessionStatus.PARTIAL_REFUND,
+                    SessionStatus.DISPUTED, SessionStatus.CHARGEBACK_LOST);
+            case PARTIAL_REFUND -> Set.of(SessionStatus.REFUNDED, SessionStatus.DISPUTED,
+                    SessionStatus.CHARGEBACK_LOST);
+            case DISPUTED -> Set.of(SessionStatus.COMPLETED, SessionStatus.CHARGEBACK_LOST);
+            case CANCELLED, REFUNDED, CHARGEBACK_LOST -> Set.of();
         };
 
         if (!allowed.contains(target)) {

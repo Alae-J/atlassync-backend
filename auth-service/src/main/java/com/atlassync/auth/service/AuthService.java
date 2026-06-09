@@ -123,8 +123,7 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
-                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
+        return buildAuthResponse(user, accessToken, rawRefreshToken, roleName);
     }
 
     @Transactional
@@ -154,8 +153,35 @@ public class AuthService {
         String accessToken = jwtService.generateAccessToken(user);
         String roleName = user.getRoles().iterator().next().getName();
 
-        return new AuthResponse(accessToken, rawRefreshToken, user.getId(),
-                user.getEmail(), user.getUsername(), roleName, user.isEmailVerified());
+        return buildAuthResponse(user, accessToken, rawRefreshToken, roleName);
+    }
+
+    /**
+     * Builds the wire-format AuthResponse from a fresh token pair + the
+     * current user state, including preferences. Centralised so adding
+     * new fields doesn't require touching every login / refresh / re-issue
+     * call site.
+     */
+    private static AuthResponse buildAuthResponse(
+            User user, String accessToken, String refreshToken, String roleName) {
+        var prefs = new AuthResponse.UserPreferences(
+                user.getDefaultStoreId(),
+                user.getCurrencyCode(),
+                user.getDietaryPrefs(),
+                user.getAllergens(),
+                user.getNotificationPrefs()
+        );
+        return new AuthResponse(
+                accessToken,
+                refreshToken,
+                user.getId(),
+                user.getEmail(),
+                user.getUsername(),
+                roleName,
+                user.isEmailVerified(),
+                user.getPhone(),
+                prefs
+        );
     }
 
     private void persistRefreshToken(String rawToken, UUID familyId, User user) {

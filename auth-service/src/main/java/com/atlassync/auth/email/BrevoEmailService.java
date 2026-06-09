@@ -45,6 +45,12 @@ public class BrevoEmailService implements EmailService {
         send(to, name, VerificationEmail.render(name, verificationCode, codeTtl));
     }
 
+    @Async("emailExecutor")
+    @Override
+    public void sendPasswordResetCode(String to, String name, String resetCode, Duration codeTtl) {
+        send(to, name, PasswordResetEmail.render(name, resetCode, codeTtl));
+    }
+
     private void send(String to, String name, EmailTemplate template) {
         if (!props.isConfigured()) {
             log.warn("[email:brevo] skipped to={} subject=\"{}\" (BREVO_API_KEY not set)",

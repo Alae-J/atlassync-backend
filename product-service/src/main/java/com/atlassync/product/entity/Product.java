@@ -46,7 +46,7 @@ public class Product {
     private BigDecimal price;
 
     @Column(name = "currency_code", nullable = false, length = 3)
-    private String currencyCode = "EUR";
+    private String currencyCode = "MAD";
 
     @Column(name = "category_id")
     private Long categoryId;
