@@ -40,6 +40,11 @@ spring:
               uri: http://localhost:8084
               predicates:
                 - Path=/api/gate/**
+
+            - id: analytics-api
+              uri: http://localhost:8089
+              predicates:
+                - Path=/api/analytics/**
           default-filters:
             - DedupeResponseHeader=Access-Control-Allow-Origin Access-Control-Allow-Credentials, RETAIN_UNIQUE
 
