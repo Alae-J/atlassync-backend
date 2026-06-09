@@ -91,6 +91,35 @@ services:
     entrypoint: ["/bin/sh", "/init-vault.sh"]
     restart: "no"
 
+  hadoop-namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    environment:
+      CLUSTER_NAME: atlassync
+    env_file:
+      - ./infrastructure/hadoop/hadoop.env
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    volumes:
+      - hadoop-namenode-data:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9870/ > /dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hadoop-datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    depends_on:
+      hadoop-namenode:
+        condition: service_healthy
+    environment:
+      SERVICE_PRECONDITION: "hadoop-namenode:9870"
+    env_file:
+      - ./infrastructure/hadoop/hadoop.env
+    volumes:
+      - hadoop-datanode-data:/hadoop/dfs/data
+
   jaeger:
     image: jaegertracing/jaeger:2.17.0
     ports:
@@ -118,3 +147,5 @@ services:
 
 volumes:
   postgres-data:
+  hadoop-namenode-data:
+  hadoop-datanode-data:
