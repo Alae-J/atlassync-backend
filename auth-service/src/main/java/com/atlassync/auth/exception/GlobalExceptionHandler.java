@@ -1,5 +1,6 @@
 package com.atlassync.auth.exception;
 
+import com.atlassync.auth.lists.ShoppingListNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
@@ -81,6 +82,14 @@ public class GlobalExceptionHandler {
         var problem = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
         problem.setType(URI.create("https://atlassync.com/errors/email-already-verified"));
         problem.setTitle("Email Already Verified");
+        return problem;
+    }
+
+    @ExceptionHandler(ShoppingListNotFoundException.class)
+    public ProblemDetail handleShoppingListNotFound(ShoppingListNotFoundException ex) {
+        var problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, ex.getMessage());
+        problem.setType(URI.create("https://atlassync.com/errors/shopping-list-not-found"));
+        problem.setTitle("Shopping List Not Found");
         return problem;
     }
 
