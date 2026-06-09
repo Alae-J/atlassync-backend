@@ -175,7 +175,8 @@ services:
       retries: 10
 
   airflow-init:
-    image: apache/airflow:2.10.4
+    build:
+      context: ./analytics/airflow
     depends_on:
       airflow-postgres:
         condition: service_healthy
@@ -190,6 +191,7 @@ services:
       - ./analytics/airflow/dags:/opt/airflow/dags
       - airflow-logs:/opt/airflow/logs
       - airflow-plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
     entrypoint: /bin/bash
     command:
       - -c
@@ -202,7 +204,8 @@ services:
     restart: "no"
 
   airflow-webserver:
-    image: apache/airflow:2.10.4
+    build:
+      context: ./analytics/airflow
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -211,6 +214,7 @@ services:
       - ./analytics/airflow/dags:/opt/airflow/dags
       - airflow-logs:/opt/airflow/logs
       - airflow-plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
     command: ["webserver"]
     ports:
       - "8091:8080"
@@ -221,7 +225,8 @@ services:
       retries: 10
 
   airflow-scheduler:
-    image: apache/airflow:2.10.4
+    build:
+      context: ./analytics/airflow
     depends_on:
       airflow-init:
         condition: service_completed_successfully
@@ -230,6 +235,7 @@ services:
       - ./analytics/airflow/dags:/opt/airflow/dags
       - airflow-logs:/opt/airflow/logs
       - airflow-plugins:/opt/airflow/plugins
+      - /var/run/docker.sock:/var/run/docker.sock
     command: ["scheduler"]
 
   jaeger:
