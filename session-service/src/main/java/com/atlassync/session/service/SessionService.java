@@ -5,6 +5,7 @@ import com.atlassync.session.entity.*;
 import com.atlassync.session.exception.*;
 import com.atlassync.session.integration.CartSnapshotClient;
 import com.atlassync.session.payment.StripeCustomerService;
+import com.atlassync.session.payment.StripeProperties;
 import com.atlassync.session.payment.StripeService;
 import com.atlassync.session.repository.QrTokenRepository;
 import com.atlassync.session.repository.SessionLineItemRepository;
@@ -47,6 +48,7 @@ public class SessionService {
     private final ObjectMapper objectMapper;
     private final StripeService stripeService;
     private final StripeCustomerService stripeCustomerService;
+    private final StripeProperties stripeProperties;
 
     /**
      * Self-injected reference for invoking @Transactional methods through the
@@ -235,7 +237,7 @@ public class SessionService {
         SessionStatus fromState = session.getStatus();
         session.transitionTo(SessionStatus.COMPLETED);
         session.setCompletedAt(Instant.now());
-        snapshotCartIntoSession(session);
+        List<SessionLineItem> lineItems = snapshotCartIntoSession(session);
         sessionRepository.save(session);
 
         recordTransition(session, fromState, SessionStatus.COMPLETED, "payment-service", null);
@@ -244,6 +246,7 @@ public class SessionService {
 
         eventProducer.publishSessionPaid(session.getId(), session.getUserId());
         eventProducer.publishSessionCompleted(session.getId());
+        eventProducer.publishPurchasesCompleted(session, lineItems, stripeProperties.currency());
 
         log.info("Payment completed for session={}, exit QR generated", sessionId);
         return new PaymentResponse(session.getId(), session.getStatus().name(), exitQr);
@@ -273,7 +276,7 @@ public class SessionService {
         SessionStatus fromState = session.getStatus();
         session.transitionTo(SessionStatus.COMPLETED);
         session.setCompletedAt(Instant.now());
-        snapshotCartIntoSession(session);
+        List<SessionLineItem> lineItems = snapshotCartIntoSession(session);
         sessionRepository.save(session);
 
         recordTransition(session, fromState, SessionStatus.COMPLETED,
@@ -283,6 +286,7 @@ public class SessionService {
 
         eventProducer.publishSessionPaid(session.getId(), session.getUserId());
         eventProducer.publishSessionCompleted(session.getId());
+        eventProducer.publishPurchasesCompleted(session, lineItems, stripeProperties.currency());
 
         log.info("[stripe-webhook] session={} marked COMPLETED, exit QR generated",
                 sessionId);
@@ -400,7 +404,7 @@ public class SessionService {
      * Cart-service holds carts in Redis with a TTL, so without this snapshot the
      * receipt would vanish once the cart key expires.
      */
-    private void snapshotCartIntoSession(ShoppingSession session) {
+    private List<SessionLineItem> snapshotCartIntoSession(ShoppingSession session) {
         CartSnapshotClient.CartSnapshot cart = cartSnapshotClient.fetch(session.getId());
         List<SessionLineItem> lineItems = cart.items().stream()
                 .map((item) -> {
@@ -421,6 +425,7 @@ public class SessionService {
         }
         session.setTotalAmount(cart.total());
         session.setItemCount(cart.itemCount());
+        return lineItems;
     }
 
     @Transactional
