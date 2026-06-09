@@ -149,6 +149,17 @@ services:
     volumes:
       - ./analytics/spark:/opt/atlassync/spark
 
+  analytics-api:
+    build:
+      context: ./analytics-api
+    depends_on:
+      hadoop-namenode:
+        condition: service_healthy
+    environment:
+      GOLD_MONTHLY_SPEND_PATH: hdfs://hadoop-namenode:9000/atlassync/gold/user_monthly_spend
+    ports:
+      - "8089:8089"
+
   jaeger:
     image: jaegertracing/jaeger:2.17.0
     ports:
