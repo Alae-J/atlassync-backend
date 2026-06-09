@@ -79,9 +79,8 @@ public class StripeWebhookController {
     }
 
     private ResponseEntity<String> handlePaymentIntentSucceeded(Event event) {
-        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
-        StripeObject obj = deserializer.getObject().orElse(null);
-        if (!(obj instanceof PaymentIntent intent)) {
+        PaymentIntent intent = unwrap(event, PaymentIntent.class);
+        if (intent == null) {
             log.warn("[stripe-webhook] payment_intent.succeeded with no intent payload");
             return ResponseEntity.ok("ignored");
         }
@@ -190,7 +189,20 @@ public class StripeWebhookController {
 
     @SuppressWarnings("unchecked")
     private <T extends StripeObject> T unwrap(Event event, Class<T> type) {
-        StripeObject obj = event.getDataObjectDeserializer().getObject().orElse(null);
+        EventDataObjectDeserializer deserializer = event.getDataObjectDeserializer();
+        StripeObject obj = deserializer.getObject().orElse(null);
+        if (obj == null) {
+            // API version skew between Stripe events and stripe-java SDK.
+            // The strict deserializer refuses unknown schemas; fall back to
+            // unsafe mapping which preserves the fields we care about.
+            try {
+                obj = deserializer.deserializeUnsafe();
+            } catch (Exception e) {
+                log.warn("[stripe-webhook] could not deserialize event {} type={}: {}",
+                        event.getId(), event.getType(), e.getMessage());
+                return null;
+            }
+        }
         return type.isInstance(obj) ? (T) obj : null;
     }
 }
