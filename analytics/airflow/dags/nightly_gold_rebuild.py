@@ -62,7 +62,27 @@ with DAG(
 
     refresh_superset_dashboard = BashOperator(
         task_id="refresh_superset_dashboard",
-        bash_command='echo "TODO: wire Superset refresh in #24 once the dashboard exists"',
+        # Trigger Superset to re-introspect the gold + silver Delta tables via
+        # Trino so any new columns Spark wrote show up on the dashboard. Reaches
+        # superset over the docker network at http://superset:8088.
+        bash_command=r"""
+set -euo pipefail
+JAR=$(mktemp)
+TOKEN=$(curl -sf -c "$JAR" -X POST http://superset:8088/api/v1/security/login \
+    -H 'Content-Type: application/json' \
+    -d '{"username":"admin","password":"admin","provider":"db"}' \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["access_token"])')
+CSRF=$(curl -sf -b "$JAR" -c "$JAR" http://superset:8088/api/v1/security/csrf_token/ \
+    -H "Authorization: Bearer $TOKEN" \
+  | python3 -c 'import sys,json; print(json.load(sys.stdin)["result"])')
+for ds in 1 2; do
+  curl -sf -b "$JAR" -c "$JAR" -X PUT "http://superset:8088/api/v1/dataset/$ds/refresh" \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "X-CSRFToken: $CSRF" \
+    -o /dev/null -w "dataset $ds refresh: %{http_code}\n"
+done
+rm -f "$JAR"
+""",
     )
 
     check_new_bronze >> bronze_to_silver >> silver_to_gold >> refresh_superset_dashboard
