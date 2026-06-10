@@ -20,5 +20,6 @@ application-local.yml
 
 # Secrets
 .env
+.env.prod
 *.pem
 *.key
