@@ -12,37 +12,37 @@ spring:
         webflux:
           routes:
             - id: auth-service
-              uri: http://localhost:8081
+              uri: ${AUTH_SERVICE_URI:http://localhost:8081}
               predicates:
                 - Path=/api/auth/**,/api/users/**,/api/lists/**
 
             - id: product-service
-              uri: http://localhost:8082
+              uri: ${PRODUCT_SERVICE_URI:http://localhost:8082}
               predicates:
                 - Path=/api/products/**
 
             - id: cart-service-rest
-              uri: http://localhost:8083
+              uri: ${CART_SERVICE_URI:http://localhost:8083}
               predicates:
                 - Path=/api/cart/**
 
             - id: cart-service-websocket
-              uri: ws://localhost:8083
+              uri: ${CART_SERVICE_WS_URI:ws://localhost:8083}
               predicates:
                 - Path=/ws/**
 
             - id: session-service-sessions
-              uri: http://localhost:8084
+              uri: ${SESSION_SERVICE_URI:http://localhost:8084}
               predicates:
                 - Path=/api/sessions/**
 
             - id: session-service-gate
-              uri: http://localhost:8084
+              uri: ${SESSION_SERVICE_URI:http://localhost:8084}
               predicates:
                 - Path=/api/gate/**
 
             - id: analytics-api
-              uri: http://localhost:8089
+              uri: ${ANALYTICS_API_URI:http://localhost:8089}
               predicates:
                 - Path=/api/analytics/**
           default-filters:

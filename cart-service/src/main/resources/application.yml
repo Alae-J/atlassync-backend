@@ -27,10 +27,10 @@ spring:
 grpc:
   client:
     product-service:
-      address: static://localhost:9082
+      address: ${GRPC_PRODUCT_ADDRESS:static://localhost:9082}
       negotiation-type: plaintext
     session-service:
-      address: static://localhost:9084
+      address: ${GRPC_SESSION_ADDRESS:static://localhost:9084}
       negotiation-type: plaintext
 
 management:
