@@ -1,0 +1,13 @@
+**/target
+.git
+.idea
+*.iml
+walkthrough
+analytics
+analytics-api
+postman
+infrastructure/hadoop
+**/*.log
+.env
+.env.*
+docker-compose.yml
