@@ -16,13 +16,18 @@ Run from inside the spark-master container:
         /opt/atlassync/spark/jobs/stream_purchases_to_bronze.py
 """
 
+import os
+
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col, current_date
 
-KAFKA_BOOTSTRAP = "kafka:29092"
+KAFKA_BOOTSTRAP = os.environ.get("KAFKA_BOOTSTRAP", "kafka:29092")
 TOPIC = "purchases.completed"
 BRONZE_PATH = "hdfs://hadoop-namenode:9000/atlassync/bronze/purchases"
-CHECKPOINT_PATH = "hdfs://hadoop-namenode:9000/atlassync/checkpoints/bronze-purchases"
+CHECKPOINT_PATH = os.environ.get(
+    "CHECKPOINT_PATH",
+    "hdfs://hadoop-namenode:9000/atlassync/checkpoints/bronze-purchases",
+)
 
 
 def main() -> None:
