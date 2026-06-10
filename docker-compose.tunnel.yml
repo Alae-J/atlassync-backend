@@ -1,0 +1,34 @@
+# SSH tunnel so the LOCAL big-data pipeline can consume the VPS Kafka.
+# Adds a `kafkatunnel` service on the pipeline network that forwards
+# kafkatunnel:39092 -> (SSH) -> the VPS Kafka TUNNEL listener (localhost:39092 on the box).
+#
+# Bring it up (merges with the main compose, same network):
+#   docker-compose -f docker-compose.yml -f docker-compose.tunnel.yml up -d --build kafkatunnel
+#
+# Then run the bronze stream against it (separate cluster => fresh checkpoint):
+#   docker exec -d \
+#     -e KAFKA_BOOTSTRAP=kafkatunnel:39092 \
+#     -e CHECKPOINT_PATH=hdfs://hadoop-namenode:9000/atlassync/checkpoints/bronze-purchases-vps \
+#     atlassync-backend_spark-master_1 /opt/spark/bin/spark-submit \
+#     --master spark://spark-master:7077 --conf spark.jars.ivy=/tmp/.ivy2 \
+#     --packages org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.8,io.delta:delta-spark_2.12:3.2.0 \
+#     --conf spark.sql.extensions=io.delta.sql.DeltaSparkSessionExtension \
+#     --conf spark.sql.catalog.spark_catalog=org.apache.spark.sql.delta.catalog.DeltaCatalog \
+#     /opt/atlassync/spark/jobs/stream_purchases_to_bronze.py
+services:
+  kafkatunnel:
+    build:
+      context: ./analytics/tunnel
+    restart: unless-stopped
+    volumes:
+      - ${HOME}/.ssh/scedge-vps.key:/key/id:ro
+    command: >
+      sh -c "install -m600 /key/id /tmp/id &&
+      exec autossh -M 0 -N
+      -o ServerAliveInterval=30 -o ServerAliveCountMax=3
+      -o ExitOnForwardFailure=yes
+      -o StrictHostKeyChecking=accept-new
+      -o UserKnownHostsFile=/tmp/known_hosts
+      -i /tmp/id
+      -L 0.0.0.0:39092:127.0.0.1:39092
+      ubuntu@15.204.90.152"
