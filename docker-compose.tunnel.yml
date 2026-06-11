@@ -33,3 +33,9 @@ services:
       -i /tmp/id
       -L 0.0.0.0:39092:127.0.0.1:39092
       ubuntu@15.204.90.152"
+
+  # Surface the VPS Kafka (via the tunnel) as a second cluster in the local Kafka UI.
+  kafka-ui:
+    environment:
+      KAFKA_CLUSTERS_1_NAME: atlassync-vps
+      KAFKA_CLUSTERS_1_BOOTSTRAPSERVERS: kafkatunnel:39092
